@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutGrid, ListChecks, Building2, SlidersHorizontal, AlertTriangle,
-  Sparkles, FileText, ShieldAlert, Cpu, Box, Menu, X, Activity,
+  Sparkles, FileText, Cpu, Box, Menu, X, Activity, HelpCircle,
 } from "lucide-react";
 import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import HealthIndicator from "@/components/HealthIndicator";
+import GlossaryModal from "@/components/GlossaryModal";
 
 interface NavItem {
   href: string;
@@ -34,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 export default function TopNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
 
   function isActive(item: NavItem) {
     if (item.match) return item.match(pathname);
@@ -42,19 +44,14 @@ export default function TopNav() {
 
   return (
     <nav className="border-b border-[var(--color-hairline)] bg-[var(--color-bg-elevated)]/95 backdrop-blur-xl">
-      {/* Row 1 — Brand + status */}
       <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4 px-5 py-4 lg:px-8">
         <Link href="/" className="group flex items-center gap-4">
-          <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7] text-white shadow-[var(--shadow-glow)] transition-transform duration-200 group-hover:scale-105">
-            <ShieldAlert size={24} strokeWidth={2.5} />
-            <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[var(--color-bg-elevated)] bg-[var(--color-sage)] animate-pulse-soft" />
+          <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[var(--color-accent)] to-[#0ea5e9] text-white shadow-[var(--shadow-glow)] transition-transform duration-200 group-hover:scale-105">
+            <Activity size={24} strokeWidth={2.5} />
           </div>
           <div>
-            <p className="font-[family-name:var(--font-display)] text-[22px] font-extrabold tracking-tight text-[var(--color-ink)] lg:text-[24px]">
-              InfraShield <span className="text-[var(--color-accent-bright)]">AI</span>
-            </p>
-            <p className="text-[14px] font-medium text-[var(--color-ink-muted)]">
-              Structural Health Monitoring · Telangana
+            <p className="font-[family-name:var(--font-display)] text-[20px] font-extrabold tracking-tight text-[var(--color-ink)] lg:text-[22px]">
+              Structural Health Monitoring
             </p>
           </div>
         </Link>
@@ -71,30 +68,38 @@ export default function TopNav() {
         </div>
       </div>
 
-      {/* Row 2 — Horizontal BUTTON bar (not sidebar) */}
       <div className="hidden border-t border-[var(--color-hairline)] bg-[var(--color-surface-sunken)]/80 lg:block">
         <div className="mx-auto max-w-[1680px] px-5 py-3 lg:px-8">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {NAV_ITEMS.map((item) => {
-              const active = isActive(item);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={clsx("nav-btn", active && "nav-btn-active")}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon size={17} strokeWidth={active ? 2.5 : 2} />
-                  {item.label}
-                </Link>
-              );
-            })}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {NAV_ITEMS.map((item) => {
+                const active = isActive(item);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={clsx("nav-btn", active && "nav-btn-active")}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon size={17} strokeWidth={active ? 2.5 : 2} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setIsGlossaryOpen(true)}
+              className="nav-btn border-[var(--color-accent)]/30 text-[var(--color-accent-bright)] font-semibold hover:border-[var(--color-accent)] hover:shadow-sm"
+              type="button"
+            >
+              <HelpCircle size={17} />
+              Glossary
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile — grid of big buttons */}
       {mobileOpen && (
         <div className="border-t border-[var(--color-hairline)] bg-[var(--color-surface-sunken)] px-5 py-4 lg:hidden animate-fade-in">
           <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[var(--color-ink-muted)]">Navigate</p>
@@ -114,9 +119,22 @@ export default function TopNav() {
                 </Link>
               );
             })}
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                setIsGlossaryOpen(true);
+              }}
+              className="nav-btn w-full justify-center !py-3.5 !text-[15px] border-[var(--color-accent)]/30 text-[var(--color-accent-bright)]"
+              type="button"
+            >
+              <HelpCircle size={18} />
+              Glossary
+            </button>
           </div>
         </div>
       )}
+
+      <GlossaryModal isOpen={isGlossaryOpen} onClose={() => setIsGlossaryOpen(false)} />
     </nav>
   );
 }

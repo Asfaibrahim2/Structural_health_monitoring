@@ -1,14 +1,12 @@
 "use client";
 
 import TopNav from "@/components/TopNav";
-import GlobalStatusStrip from "@/components/GlobalStatusStrip";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-mesh-bg flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+      <header className="sticky top-0 z-50 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
         <TopNav />
-        <GlobalStatusStrip />
       </header>
 
       <main className="flex-1 px-5 py-8 lg:px-8 lg:py-10">
