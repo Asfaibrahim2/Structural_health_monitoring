@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple
-
+ 
 # Vectorized simulation configuration
 START_DATE = "2026-08-01 00:00:00"
 END_DATE = "2026-08-30 23:59:00"
 FREQ = "min"
-
+ 
 # List of 20 realistic Telangana infrastructure projects with baseline behaviors
 BRIDGES_METADATA = [
     {
@@ -350,42 +350,16 @@ BRIDGES_METADATA = [
         "scenario_type": "persistent_anomaly" # High pump hydraulic pressure surcharge
     }
 ]
-
-# Assign zones (P1-P4) to bridges with the required distribution
-# All bridges default to 'P4' (critical). Ensure 2-3 bridges in P1, P2, P3.
-import random
-random.seed(42)
-# Create a shuffled list of bridge indices
-bridge_indices = list(range(len(BRIDGES_METADATA)))
-random.shuffle(bridge_indices)
-# Define zone allocation counts
-zone_counts = {
-    "P1": 3,  # gradual_deterioration
-    "P2": 3,  # persistent_anomaly
-    "P3": 3,  # sudden_spike
-    "P4": len(BRIDGES_METADATA) - 9,  # remaining bridges
-}
-zone_iter = []
-for zone, count in zone_counts.items():
-    zone_iter.extend([zone] * count)
-# Assign zones and corresponding scenario_type
-for idx, zone in zip(bridge_indices, zone_iter):
-    BRIDGES_METADATA[idx]["zone"] = zone
-    # Map zone to a default scenario_type for synthetic data
-    zone_to_scenario = {
-        "P1": "gradual_deterioration",
-        "P2": "persistent_anomaly",
-        "P3": "sudden_spike",
-        "P4": "missing_values",
-    }
-    BRIDGES_METADATA[idx]["scenario_type"] = zone_to_scenario[zone]
-# Optional: expose a helper to get zone for a bridge
-def get_bridge_zone(bridge_id: str) -> str:
-    for meta in BRIDGES_METADATA:
-        if meta["bridge_id"] == bridge_id:
-            return meta.get("zone", "P4")
-    return "P4"
-
+ 
+# NOTE: A previous version of this file had a block here that auto-assigned
+# a "zone" (P1-P4) to each bridge and then OVERWROTE scenario_type based on
+# that zone. That collapsed the 9 intentionally-designed scenario types above
+# down to just 4, and desynced this file from bridge_metadata.json, the
+# already-generated CSVs/DB, the trained per-bridge models, and the test
+# suite (which asserts specific scenarios for specific bridge_ids). Each
+# bridge's scenario_type is deliberately hand-assigned above — do not
+# recompute or overwrite it here.
+ 
 def get_telangana_weather(timestamps: pd.DatetimeIndex, random_seed: int = 42) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Generates 30 days of weather readings mapped to Telangana's climatic conditions in August.
@@ -470,10 +444,10 @@ def get_telangana_weather(timestamps: pd.DatetimeIndex, random_seed: int = 42) -
     rain_vals2 = np.zeros(np.sum(mask_day23_24))
     rain_vals2[rain_p2 > 0.75] = np.random.exponential(scale=0.1, size=np.sum(rain_p2 > 0.75))
     rainfall[mask_day23_24] = rain_vals2
-
+ 
     return temperature, humidity, wind_speed, rainfall
-
-
+ 
+ 
 def get_traffic_load(timestamps: pd.DatetimeIndex, structure_type: str, random_seed: int = 42) -> np.ndarray:
     """
     Simulates traffic load percentages (0-100%) incorporating:
@@ -554,8 +528,8 @@ def get_traffic_load(timestamps: pd.DatetimeIndex, structure_type: str, random_s
         
     traffic = np.clip(traffic, 0.0, 100.0)
     return traffic
-
-
+ 
+ 
 def generate_baseline_telemetry(
     meta: Dict, 
     temp: np.ndarray, 
@@ -605,8 +579,8 @@ def generate_baseline_telemetry(
     displacement = meta["base_displacement"] + disp_thermal + disp_traffic + disp_noise
     
     return strain, vibration, displacement
-
-
+ 
+ 
 def apply_scenario_overlays(
     meta: Dict,
     timestamps: pd.DatetimeIndex,
@@ -657,7 +631,7 @@ def apply_scenario_overlays(
                     displacement[idx] -= 22.0 * decay
                     ground_truth[idx] = 1
                     scenario_names[idx] = "sudden_spike"
-
+ 
     elif scenario_type == "persistent_anomaly":
         shift_idx_list = np.where((days == 18) & (hours == 14) & (minutes == 0))[0]
         if len(shift_idx_list) > 0:
@@ -667,7 +641,7 @@ def apply_scenario_overlays(
             ground_truth[shift_idx:] = 1
             for i in range(shift_idx, n):
                 scenario_names[i] = "persistent_anomaly"
-
+ 
     elif scenario_type == "gradual_deterioration":
         det_start_list = np.where((days == 10) & (hours == 0) & (minutes == 0))[0]
         if len(det_start_list) > 0:
@@ -682,7 +656,7 @@ def apply_scenario_overlays(
             ground_truth[threshold_idx:] = 1
             for i in range(start_idx, n):
                 scenario_names[i] = "gradual_deterioration"
-
+ 
     elif scenario_type == "environmental_disturbance":
         storm_mask = (days == 20) & (hours >= 12) & (hours <= 21)
         wind[storm_mask] = np.random.uniform(22.0, 32.0, np.sum(storm_mask))
@@ -696,7 +670,7 @@ def apply_scenario_overlays(
         ground_truth[storm_mask] = 1
         for idx in np.where(storm_mask)[0]:
             scenario_names[idx] = "environmental_disturbance"
-
+ 
     elif scenario_type == "multi_sensor_anomaly":
         lock_mask = (days >= 24) & (days <= 27)
         for i in range(n):
@@ -706,7 +680,7 @@ def apply_scenario_overlays(
                     displacement[i] = meta["base_displacement"] + 0.08 * (29.5 - 25.0) + np.random.normal(0, 0.1)
                     strain[i] -= 45.0 + np.random.normal(0, 2.0)
                     ground_truth[i] = 1
-
+ 
     elif scenario_type == "sensor_drift":
         drift_start_list = np.where((days == 12) & (hours == 0) & (minutes == 0))[0]
         if len(drift_start_list) > 0:
@@ -719,7 +693,7 @@ def apply_scenario_overlays(
             ground_truth[flag_start:] = 1
             for i in range(start_idx, n):
                 scenario_names[i] = "sensor_drift"
-
+ 
     elif scenario_type == "missing_values":
         dropout_mask = (days >= 8) & (days <= 10)
         dropout_indices = np.where(dropout_mask)[0]
@@ -731,7 +705,7 @@ def apply_scenario_overlays(
             vibration[idx] = np.nan
             displacement[idx] = np.nan
             scenario_names[idx] = "missing_values"
-
+ 
     elif scenario_type == "sensor_dropout":
         dropout_mask = ((days == 14) & (hours >= 8)) | ((days > 14) & (days < 18)) | ((days == 18) & (hours < 8))
         dropout_indices = np.where(dropout_mask)[0]
@@ -740,7 +714,7 @@ def apply_scenario_overlays(
         ground_truth[dropout_indices] = 1
         for idx in dropout_indices:
             scenario_names[idx] = "sensor_dropout"
-
+ 
     elif scenario_type == "noisy_sensor":
         noise_mask = (days >= 21) & (days <= 26)
         noise_indices = np.where(noise_mask)[0]
@@ -749,10 +723,10 @@ def apply_scenario_overlays(
         ground_truth[noise_indices] = 1
         for idx in noise_indices:
             scenario_names[idx] = "noisy_sensor"
-
+ 
     return strain, vibration, displacement, temp, humidity, wind, rain, traffic, scenario_names, ground_truth
-
-
+ 
+ 
 def generate_bridge_dataset(meta: Dict, random_seed: int = 42) -> pd.DataFrame:
     """
     Generates a full time-series DataFrame for a single bridge.
@@ -793,3 +767,4 @@ def generate_bridge_dataset(meta: Dict, random_seed: int = 42) -> pd.DataFrame:
     })
     
     return df
+ 

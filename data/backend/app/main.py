@@ -5,8 +5,8 @@ from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from backend.app.database import engine, Base, get_db
-from backend.app.schemas import (
+from .database import engine, Base, get_db
+from .schemas import (
     HealthCheckResponse, BridgeSummary, BridgeBase, SensorReadingBase,
     RiskAssessmentSchema, BridgeLatestState, AnomalyEventSchema,
     InspectionQueueItem, SensorHealthSchema, SimulateRequest,
@@ -14,13 +14,13 @@ from backend.app.schemas import (
     ReplayResponse, AnalyzeRequest, AnalyzeResponse, ReportRequest,
     ReportResponse, AssistantQueryRequest, AssistantQueryResponse
 )
-from backend.app.repository import (
+from .repository import (
     BridgeRepository, TelemetryRepository, RiskRepository,
     AnomalyRepository, SensorHealthRepository, ReportRepository
 )
-from backend.app.services import seed_initial_data, run_simulation
-from backend.app.assistant import AIEngineerAssistant
-from backend.app.report_generator import generate_engineer_report
+from .services import seed_initial_data, run_simulation
+from .assistant import AIEngineerAssistant
+from .report_generator import generate_engineer_report
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -194,8 +194,16 @@ def get_inspection_queue(db: Session = Depends(get_db)):
         risk_val = latest_risk.risk_score if latest_risk else 0.0
         prio_val = latest_risk.inspection_priority if latest_risk else "P4"
         uncert_val = latest_risk.uncertainty if latest_risk else 0.0
+        conf_val = latest_risk.confidence_score if latest_risk else 0.0
         active_anom = events[0].anomaly_type if events else "None"
-        
+        explanation = latest_risk.risk_explanation if latest_risk else "Within baseline"
+        main_reason = explanation[:140] + ("…" if len(explanation) > 140 else "")
+        actions = {
+            "P1": "Prompt engineering review recommended",
+            "P2": "Schedule inspection within 7 days",
+            "P3": "Include in next routine inspection cycle",
+            "P4": "Continue routine monitoring",
+        }
         item = InspectionQueueItem(
             bridge_id=b.bridge_id,
             bridge_name=b.bridge_name,
@@ -203,7 +211,10 @@ def get_inspection_queue(db: Session = Depends(get_db)):
             inspection_priority=prio_val,
             risk_score=risk_val,
             uncertainty=uncert_val,
+            confidence_score=conf_val,
             active_anomaly_type=active_anom,
+            main_reason=main_reason,
+            recommended_action=actions.get(prio_val, actions["P4"]),
             vulnerability_factor=b.vulnerability_factor
         )
         items.append(item)

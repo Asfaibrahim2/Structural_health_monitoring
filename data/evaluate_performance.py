@@ -21,7 +21,7 @@ def main():
     print("2. Preprocessing and engineering features...")
     df_cleaned = clean_telemetry_data(df_raw)
     df_features = compute_features(df_cleaned)
-    print("   Data cleaning and feature engineering complete.")
+    print(" Data cleaning and feature engineering complete.")
     
     # 3. Fit Adaptive Baseline
     # Training window: first 14 days (Aug 1 to Aug 14)

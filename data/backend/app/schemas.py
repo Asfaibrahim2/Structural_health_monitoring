@@ -97,7 +97,10 @@ class InspectionQueueItem(BaseModel):
     inspection_priority: str
     risk_score: float
     uncertainty: float
+    confidence_score: float = 0.0
     active_anomaly_type: Optional[str] = "None"
+    main_reason: str = "Within baseline"
+    recommended_action: str = "Continue routine monitoring"
     vulnerability_factor: float
 
 # Sensor Health

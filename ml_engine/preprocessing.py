@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
-
+ 
 def clean_telemetry_data(df: pd.DataFrame, outlier_preserve: bool = True) -> pd.DataFrame:
     """
     Cleans raw telemetry data by:
@@ -30,17 +30,17 @@ def clean_telemetry_data(df: pd.DataFrame, outlier_preserve: bool = True) -> pd.
         df[f"{col}_was_missing"] = df[col].isna().astype(int)
         
     # 3. Imputation (Forward fill followed by backward fill or linear interpolation)
-    # We group by bridge_id so we don't bleed values between different bridges
-    def impute_bridge_group(group: pd.DataFrame) -> pd.DataFrame:
-        for col in physical_cols:
-            # Linear interpolation is smooth, but we fallback to ffill/bfill for edges
-            group[col] = group[col].interpolate(method="linear").ffill().bfill()
-        return group
-        
-    df = df.groupby("bridge_id", group_keys=False).apply(impute_bridge_group)
+    # We group by bridge_id so we don't bleed values between different bridges.
+    # NOTE: groupby(...).apply(func_returning_full_frame) is used here in some pandas
+    # versions but pandas >=2.2 (and pandas 3.x by default) drops the grouping column
+    # from the sub-frame passed to apply, which silently deletes "bridge_id" from the
+    # output. Using groupby(...)[cols].transform(...) avoids that entirely and is faster.
+    df[physical_cols] = df.groupby("bridge_id")[physical_cols].transform(
+        lambda s: s.interpolate(method="linear").ffill().bfill()
+    )
     
     return df
-
+ 
 def compute_robust_scale_params(series: pd.Series) -> Tuple[float, float]:
     """
     Calculates median and Median Absolute Deviation (MAD) for robust scaling.
@@ -53,13 +53,13 @@ def compute_robust_scale_params(series: pd.Series) -> Tuple[float, float]:
         if pd.isna(mad) or mad < 1e-6:
             mad = 1.0
     return float(median), float(mad)
-
+ 
 def apply_robust_scaling(series: pd.Series, median: float, mad: float) -> pd.Series:
     """
     Scales a series using pre-computed median and MAD parameters.
     """
     return (series - median) / mad
-
+ 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Computes time-series and sensor-health features per bridge:
@@ -115,3 +115,4 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
         result_df[col] = result_df[col].ffill().bfill().fillna(0.0)
         
     return result_df
+ 

@@ -13,7 +13,10 @@ class HybridAnomalyDetector:
     2. Unsupervised Machine Learning (Isolation Forest on baseline residuals).
     3. Temporal persistence analysis (consecutive alarms, recovery state, and gradual trend tracking).
     """
-    def __init__(self, models_dir: str = "c:/ai_xdomain/infrastructure/models", version: str = "v1.0"):
+    def __init__(self, models_dir: str = None, version: str = "v1.0"):
+        if models_dir is None:
+            root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            models_dir = os.path.join(root, "models", "bridge_detectors")
         self.models_dir = models_dir
         self.version = version
         os.makedirs(models_dir, exist_ok=True)
