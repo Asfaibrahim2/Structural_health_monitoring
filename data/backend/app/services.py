@@ -36,6 +36,168 @@ _SCENARIO_RISK_FLOORS = {
     "normal": (18.0, "P4", 96.0),
 }
 
+
+def build_recommended_action(
+    *,
+    bridge_name: str,
+    structure_type: str,
+    priority: str,
+    scenario_or_anomaly: str,
+    vulnerability_factor: float = 0.5,
+    risk_score: float = 0.0,
+) -> str:
+    """
+    Build a bridge-specific inspection action (not a generic P1/P2 template).
+
+    Combines:
+    - priority → urgency / timeline
+    - anomaly/scenario → technical response
+    - structure type → asset-specific engineering focus
+    - vulnerability / risk → intensity of language
+    """
+    prio = (priority or "P4").upper()
+    scenario = (scenario_or_anomaly or "normal").lower().replace(" ", "_")
+    stype = (structure_type or "").lower()
+    short_name = (bridge_name or "this bridge").split("(")[0].strip()
+
+    # Urgency prefix by priority (timeline differs)
+    urgency = {
+        "P1": f"Dispatch field crew to {short_name} within 24 hours",
+        "P2": f"Schedule licensed inspection at {short_name} within 7 days",
+        "P3": f"Add {short_name} to the next monthly inspection cycle",
+        "P4": f"Keep {short_name} on routine telemetry watch",
+    }.get(prio, f"Monitor {short_name}")
+
+    # Technical action by anomaly / scenario profile
+    technical = {
+        "gradual_deterioration": "map crack growth / section loss and compare against previous inspection photos",
+        "persistent_anomaly": "verify pier/abutment settlement markers and re-check bearing alignment",
+        "sudden_spike": "replay load-event telemetry and inspect for impact or braking damage at mid-span",
+        "multi_sensor_anomaly": "run multi-sensor correlation audit (strain + vibration + displacement) before clearance",
+        "environmental_disturbance": "cross-check weather/traffic peaks; only escalate if residuals remain after the event",
+        "sensor_drift": "recalibrate strain gauges and re-baseline temperature compensation curves",
+        "noisy_sensor": "secure accelerometer mounts and replace loose coupling hardware",
+        "sensor_dropout": "restore sensor power/comms link and validate last-known-good packets",
+        "missing_values": "inspect gateway packet loss and repair remote telemetry uplink",
+        "missing_data": "inspect gateway packet loss and repair remote telemetry uplink",
+        "normal": "continue baseline trend review — no structural intervention required",
+    }.get(scenario, "review anomaly replay and confirm multi-sensor agreement")
+
+    # Structure-specific focus (civil SHM practice)
+    if "cable" in stype:
+        focus = "prioritize stay-cable damping, anchorage corrosion, and deck-edge vibration nodes"
+    elif "arch" in stype or "heritage" in stype:
+        focus = "prioritize masonry/arch ring cracks, spandrel walls, and scour at river piers"
+    elif "suspension" in stype:
+        focus = "prioritize main-cable sag, hanger fatigue, and tower plumb checks"
+    elif "truss" in stype:
+        focus = "prioritize truss member connections, gusset plates, and fatigue-prone joints"
+    elif "concrete" in stype or "girder" in stype:
+        focus = "prioritize girder soffit cracking, bearing pads, and expansion-joint lockup"
+    else:
+        focus = "prioritize load-path members nearest the highest residual sensors"
+
+    # Intensity modifier for high vulnerability / critical risk
+    if prio in ("P1", "P2") and vulnerability_factor >= 0.7:
+        intensity = "Treat as high-vulnerability asset - restrict overload permits until cleared."
+    elif prio == "P1" or risk_score >= 80:
+        intensity = "Do not clear for heavy overload permits until engineer sign-off."
+    elif prio == "P4" and scenario in ("normal", "none", ""):
+        return f"{urgency}: {technical}."
+    else:
+        intensity = ""
+
+    parts = [f"{urgency}: {technical}; {focus}."]
+    if intensity:
+        parts.append(intensity)
+    return " ".join(parts)
+
+def attach_adaptive_baseline(readings: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Fit AdaptiveBaselineModel (Ridge) on the given telemetry window and attach
+    time-varying expected values + 3σ bands to each reading.
+
+    This is NOT a static mean — expected values change with temperature, traffic,
+    rainfall, and cyclical time-of-day / day-of-week features.
+    """
+    if not readings:
+        return []
+
+    rows = []
+    for r in readings:
+        rows.append({
+            "timestamp": str(r.timestamp),
+            "bridge_id": r.bridge_id,
+            "sensor_id": r.sensor_id,
+            "strain_microstrain": r.strain_microstrain,
+            "vibration_g": r.vibration_g,
+            "displacement_mm": r.displacement_mm,
+            "temperature_c": r.temperature_c if r.temperature_c is not None else 28.0,
+            "humidity_percent": r.humidity_percent if r.humidity_percent is not None else 55.0,
+            "rainfall_mm": r.rainfall_mm if r.rainfall_mm is not None else 0.0,
+            "traffic_load_percent": r.traffic_load_percent if r.traffic_load_percent is not None else 40.0,
+            "wind_speed_mps": r.wind_speed_mps if r.wind_speed_mps is not None else 2.0,
+            "scenario": r.scenario or "normal",
+            "ground_truth_anomaly": int(r.ground_truth_anomaly or 0),
+        })
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    # Prefer labeled normal rows for training; else use first 40% of the window
+    normal_mask = df["ground_truth_anomaly"] == 0
+    if normal_mask.sum() >= 40:
+        train_df = df[normal_mask]
+    else:
+        cut = max(20, int(len(df) * 0.4))
+        train_df = df.iloc[:cut].copy()
+        train_df["ground_truth_anomaly"] = 0
+
+    t_start = str(train_df["timestamp"].min())
+    t_end = str(train_df["timestamp"].max())
+
+    try:
+        # Temporarily mark train rows as normal for AdaptiveBaselineModel filter
+        df_fit = df.copy()
+        train_idx = train_df.index
+        df_fit.loc[:, "ground_truth_anomaly"] = 1
+        df_fit.loc[train_idx, "ground_truth_anomaly"] = 0
+
+        model = AdaptiveBaselineModel(version="v1.0-adaptive")
+        model.fit(df_fit, train_start=t_start, train_end=t_end)
+        pred = model.predict(df_fit)
+    except Exception as exc:
+        # Fallback: still return raw readings without expected fields
+        print(f"Adaptive baseline fit failed: {exc}")
+        return rows
+
+    out: List[Dict[str, Any]] = []
+    for i, row in pred.iterrows():
+        item = {
+            "bridge_id": row["bridge_id"],
+            "sensor_id": row["sensor_id"],
+            "timestamp": str(row["timestamp"]),
+            "strain_microstrain": None if pd.isna(row["strain_microstrain"]) else float(row["strain_microstrain"]),
+            "vibration_g": None if pd.isna(row["vibration_g"]) else float(row["vibration_g"]),
+            "displacement_mm": None if pd.isna(row["displacement_mm"]) else float(row["displacement_mm"]),
+            "temperature_c": None if pd.isna(row["temperature_c"]) else float(row["temperature_c"]),
+            "humidity_percent": None if pd.isna(row["humidity_percent"]) else float(row["humidity_percent"]),
+            "rainfall_mm": None if pd.isna(row["rainfall_mm"]) else float(row["rainfall_mm"]),
+            "traffic_load_percent": None if pd.isna(row["traffic_load_percent"]) else float(row["traffic_load_percent"]),
+            "wind_speed_mps": None if pd.isna(row["wind_speed_mps"]) else float(row["wind_speed_mps"]),
+            "scenario": row["scenario"],
+            "ground_truth_anomaly": int(row["ground_truth_anomaly"]),
+            "baseline_mode": "adaptive_ridge",
+        }
+        for target in ("strain_microstrain", "vibration_g", "displacement_mm"):
+            for suffix in ("expected", "lower", "upper"):
+                col = f"{target}_{suffix}"
+                val = row.get(col)
+                item[col] = None if val is None or (isinstance(val, float) and pd.isna(val)) else float(val)
+        out.append(item)
+    return out
+
+
 # Global Isolation Forest model (loaded once at startup)
 _ISOLATION_MODEL = None
 
@@ -175,23 +337,30 @@ def _process_and_seed_dataframe(db: Session, df_sample: pd.DataFrame) -> None:
         latest_row = df_risk.loc[df_risk["risk_score"].idxmax()]
         calibrated = _calibrate_risk_row(latest_row, meta, ml_peak)
 
-        RiskRepository.create_risk_assessment(db, {
-            "bridge_id": b_id,
-            "timestamp": str(latest_row["timestamp"]),
-            "risk_score": calibrated["risk_score"],
-            "uncertainty": calibrated["uncertainty"],
-            "confidence_score": calibrated["confidence_score"],
-            "inspection_priority": calibrated["inspection_priority"],
-            "severity_score": float(latest_row["severity_score"]),
-            "persistence_score": float(latest_row["persistence_score"]),
-            "sensor_agreement_score": float(latest_row["sensor_agreement_score"]),
-            "trend_score": float(latest_row["trend_score"]),
-            "asset_vulnerability_score": float(latest_row["asset_vulnerability_score"]),
-            "context_score": float(latest_row["context_score"]),
-            "data_quality_score": float(latest_row["data_quality_score"]),
-            "risk_explanation": calibrated["risk_explanation"],
-        })
+        # Persist a time series of risk snapshots (needed for trend forecasting)
+        n_samples = min(24, len(df_risk))
+        sample_idxs = sorted(set(int(i) for i in np.linspace(0, len(df_risk) - 1, n_samples)))
+        for idx in sample_idxs:
+            row = df_risk.iloc[idx]
+            snap = _calibrate_risk_row(row, meta, ml_peak)
+            RiskRepository.create_risk_assessment(db, {
+                "bridge_id": b_id,
+                "timestamp": str(row["timestamp"]),
+                "risk_score": snap["risk_score"],
+                "uncertainty": snap["uncertainty"],
+                "confidence_score": snap["confidence_score"],
+                "inspection_priority": snap["inspection_priority"],
+                "severity_score": float(row["severity_score"]),
+                "persistence_score": float(row["persistence_score"]),
+                "sensor_agreement_score": float(row["sensor_agreement_score"]),
+                "trend_score": float(row["trend_score"]),
+                "asset_vulnerability_score": float(row["asset_vulnerability_score"]),
+                "context_score": float(row["context_score"]),
+                "data_quality_score": float(row["data_quality_score"]),
+                "risk_explanation": snap["risk_explanation"],
+            })
 
+        # Keep peak row as the primary calibrated state for alerts / health
         for sensor_id, sensor_type in sensor_configs:
             health = float(latest_row.get(f"{sensor_type}_health_score", 96.0))
             scenario = meta.get("scenario_type", "normal")
@@ -224,13 +393,21 @@ def _process_and_seed_dataframe(db: Session, df_sample: pd.DataFrame) -> None:
         scenario = meta.get("scenario_type", "normal")
         should_alert = anom_type != "normal" or scenario not in ("normal", "missing_values")
         if should_alert and calibrated["inspection_priority"] in ("P1", "P2", "P3"):
+            raw_start = latest_row.get("anomaly_start", latest_row["timestamp"])
+            raw_end = latest_row.get("anomaly_end", "")
+            start_s = str(raw_start)
+            end_s = str(raw_end) if raw_end is not None else ""
+            if start_s.lower() in ("nat", "nan", "none", ""):
+                start_s = str(latest_row["timestamp"])
+            if end_s.lower() in ("nat", "nan", "none"):
+                end_s = ""
             AnomalyRepository.create_event(db, {
                 "bridge_id": b_id,
-                "start_time": str(latest_row.get("anomaly_start", latest_row["timestamp"])),
-                "end_time": str(latest_row.get("anomaly_end", "")),
+                "start_time": start_s,
+                "end_time": end_s,
                 "anomaly_type": anom_type if anom_type != "normal" else scenario,
                 "severity": "CRITICAL" if calibrated["inspection_priority"] in ["P1", "P2"] else "WARNING",
-                "duration_minutes": int(latest_row.get("duration_minutes", 31)),
+                "duration_minutes": int(latest_row.get("duration_minutes", 31)) if pd.notna(latest_row.get("duration_minutes", 31)) else 31,
                 "description": (
                     f"{'Critical' if calibrated['inspection_priority'] == 'P1' else 'Elevated'} "
                     f"structural deviation on {meta.get('bridge_name', b_id)} — {scenario.replace('_', ' ')}."

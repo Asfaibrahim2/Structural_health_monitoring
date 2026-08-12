@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, type BridgeSummary, type AnomalyEvent, type SensorHealth, type SensorReading, type RiskAssessment } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import Disclaimer from "@/components/Disclaimer";
 import BridgeSelector from "@/components/BridgeSelector";
 import { Card } from "@/components/Card";
 import PriorityBadge from "@/components/PriorityBadge";
@@ -92,20 +91,19 @@ function ReportsContent() {
   return (
     <>
       <PageHeader
-        title="Engineer Report"
-        description="Select a bridge, review risk evidence, anomaly timeline, charts, and sensor health — then generate and download a full inspection report."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Engineer Report" }]}
+        title="Reports"
+        description="Review evidence and generate an inspection report for a bridge."
       />
 
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div className="min-w-[240px] flex-1 max-w-md">
-          <label className="text-label mb-2 block">Selected bridge</label>
+          <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-ink-muted)]">Bridge</label>
           <BridgeSelector value={bridgeId} onChange={setBridgeId} />
         </div>
         <button
           onClick={generateReport}
           disabled={generating || !bridgeId}
-          className="flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-5 py-3 text-[14px] font-semibold text-[#0d1219] disabled:opacity-50"
+          className="flex items-center gap-2 rounded-[var(--radius-btn)] bg-[var(--color-accent)] px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-50"
         >
           <FileText size={16} />
           {generating ? "Generating…" : "Generate report"}

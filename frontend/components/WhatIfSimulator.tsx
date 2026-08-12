@@ -5,7 +5,6 @@ import { useState } from "react";
 import { api, type SimulateResponse } from "@/lib/api";
 import { Card } from "@/components/Card";
 import PriorityBadge from "@/components/PriorityBadge";
-import Disclaimer from "@/components/Disclaimer";
 import Tooltip from "@/components/Tooltip";
 import { TOOLTIPS } from "@/lib/status";
 import type { InspectionPriority } from "@/lib/api";

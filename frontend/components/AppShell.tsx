@@ -1,25 +1,29 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import TopNav from "@/components/TopNav";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [enterKey, setEnterKey] = useState(0);
+
+  useEffect(() => {
+    setEnterKey((k) => k + 1);
+  }, [pathname]);
+
   return (
     <div className="app-mesh-bg flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-        <TopNav />
-      </header>
+      <TopNav />
 
-      <main className="flex-1 px-5 py-8 lg:px-8 lg:py-10">
-        <div className="mx-auto max-w-[1680px] animate-fade-up">{children}</div>
+      <main className="flex-1 px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        <div key={enterKey} className="page-enter mx-auto max-w-[1400px]">
+          {children}
+        </div>
       </main>
 
-      <footer className="border-t border-[var(--color-hairline)] bg-[var(--color-bg-elevated)]/90 px-5 py-5 text-center backdrop-blur-sm lg:px-8">
-        <p className="text-[14px] font-medium text-[var(--color-ink-muted)]">
-          InfraShield AI — decision-support prototype only. Not a structural safety certification.
-        </p>
-        <p className="mt-1 text-[12px] text-[var(--color-ink-muted)]/70">
-          Always verify with licensed engineering inspection.
-        </p>
+      <footer className="border-t border-[var(--color-hairline)] bg-white px-4 py-3.5 text-[12px] text-[var(--color-ink-secondary)] sm:px-6 lg:px-8">
+        InfraShield AI — decision support only. Not a structural safety certification.
       </footer>
     </div>
   );

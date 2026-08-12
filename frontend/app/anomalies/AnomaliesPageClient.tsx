@@ -10,7 +10,6 @@ import PriorityBadge from "@/components/PriorityBadge";
 import BridgeSelector from "@/components/BridgeSelector";
 import AnomalyTimeSeriesChart from "@/components/AnomalyTimeSeriesChart";
 import SensorChart from "@/components/SensorChart";
-import Disclaimer from "@/components/Disclaimer";
 import RiskGauge from "@/components/RiskGauge";
 import { LoadingState, EmptyState, ErrorState } from "@/components/ui/AsyncState";
 import { ArrowDown, Clock } from "lucide-react";
@@ -70,15 +69,12 @@ export default function AnomaliesPageClient() {
   return (
     <>
       <PageHeader
-        eyebrow="Stage F · Page 3"
-        title="Anomaly Explorer"
-        description="Time-series with baseline comparison, shaded anomaly windows, environmental context, event timeline, and multi-sensor agreement."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Anomaly Explorer" }]}
+        title="Anomalies"
+        description="Compare sensor readings against the adaptive baseline for a selected bridge."
       />
-      <Disclaimer className="mb-6" />
 
-      <div className="mb-6 max-w-md">
-        <label className="text-label mb-2 block">Select bridge to investigate</label>
+      <div className="mb-5 max-w-sm">
+        <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-ink-muted)]">Bridge</label>
         <BridgeSelector value={bridgeId} onChange={setBridgeId} />
       </div>
 
@@ -97,7 +93,7 @@ export default function AnomaliesPageClient() {
 
             <div className="space-y-4">
               <Card>
-                <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Risk breakdown</h3>
+                <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">Risk breakdown</h3>
                 {bridge && (
                   <div className="mt-4 flex flex-col items-center">
                     <RiskGauge score={bridge.latest_risk_score} size={130} />
@@ -114,7 +110,7 @@ export default function AnomaliesPageClient() {
               </Card>
 
               <Card>
-                <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Environmental context</h3>
+                <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">Environment</h3>
                 <div className="mt-4 grid gap-4">
                   <SensorChart readings={readings} dataKey="traffic_load_percent" label="Traffic load (%)" color="#a78bfa" />
                   <SensorChart readings={readings} dataKey="rainfall_mm" label="Rainfall (mm)" color="#38bdf8" />
@@ -125,8 +121,8 @@ export default function AnomaliesPageClient() {
           </div>
 
           <Card className="mt-6">
-            <h3 className="flex items-center gap-2 font-[family-name:var(--font-display)] text-[16px] font-bold">
-              <Clock size={18} /> Event timeline
+            <h3 className="flex items-center gap-2 text-[15px] font-semibold text-[var(--color-ink)]">
+              <Clock size={16} /> Event timeline
             </h3>
             {timeline.length === 0 ? (
               <p className="mt-4 text-[14px] text-[var(--color-ink-muted)]">No anomaly events recorded.</p>
@@ -147,7 +143,7 @@ export default function AnomaliesPageClient() {
 
           <Card className="mt-6 overflow-hidden p-0">
             <div className="border-b border-[var(--color-hairline)] px-5 py-4">
-              <h3 className="font-[family-name:var(--font-display)] text-[16px] font-bold">Anomaly event log</h3>
+              <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">Event log</h3>
             </div>
             {events.length === 0 ? (
               <p className="px-5 py-10 text-center text-[14px] text-[var(--color-ink-muted)]">No open events for this bridge.</p>

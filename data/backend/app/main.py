@@ -21,7 +21,7 @@ from .repository import (
     BridgeRepository, TelemetryRepository, RiskRepository,
     AnomalyRepository, SensorHealthRepository, ReportRepository
 )
-from .services import seed_initial_data, run_simulation
+from .services import seed_initial_data, run_simulation, build_recommended_action, attach_adaptive_baseline
 from .assistant import AIEngineerAssistant
 from .report_generator import generate_engineer_report, generate_pdf_report_buffer
 
@@ -339,7 +339,8 @@ def get_bridge_timeseries(
         raise HTTPException(status_code=404, detail=f"Bridge '{bridge_id}' not found.")
         
     readings = TelemetryRepository.get_timeseries(db, bridge_id, start_time, end_time, limit)
-    return readings
+    # Attach time-varying AdaptiveBaselineModel (Ridge) expected values — not a static mean
+    return attach_adaptive_baseline(readings)
 
 # -----------------------------------------------------------------------------
 # 6. Anomaly Events API
@@ -378,12 +379,15 @@ def get_inspection_queue(db: Session = Depends(get_db)):
         active_anom = events[0].anomaly_type if events else "None"
         explanation = latest_risk.risk_explanation if latest_risk else "Within baseline"
         main_reason = explanation[:140] + ("…" if len(explanation) > 140 else "")
-        actions = {
-            "P1": "Prompt engineering review recommended",
-            "P2": "Schedule inspection within 7 days",
-            "P3": "Include in next routine inspection cycle",
-            "P4": "Continue routine monitoring",
-        }
+        scenario_hint = active_anom if active_anom and active_anom != "None" else getattr(b, "scenario_type", "normal")
+        recommended = build_recommended_action(
+            bridge_name=b.bridge_name,
+            structure_type=b.structure_type,
+            priority=prio_val,
+            scenario_or_anomaly=scenario_hint,
+            vulnerability_factor=float(b.vulnerability_factor or 0.5),
+            risk_score=float(risk_val),
+        )
         item = InspectionQueueItem(
             bridge_id=b.bridge_id,
             bridge_name=b.bridge_name,
@@ -394,7 +398,7 @@ def get_inspection_queue(db: Session = Depends(get_db)):
             confidence_score=conf_val,
             active_anomaly_type=active_anom,
             main_reason=main_reason,
-            recommended_action=actions.get(prio_val, actions["P4"]),
+            recommended_action=recommended,
             vulnerability_factor=b.vulnerability_factor
         )
         items.append(item)
@@ -641,6 +645,8 @@ def get_bridge_forecast(
     db: Session = Depends(get_db)
 ):
     """Forecasts risk score and sensor trends. Strictly avoids prediction of failure terminology."""
+    import numpy as np
+
     bridge = BridgeRepository.get_bridge_by_id(db, bridge_id)
     if not bridge:
         raise HTTPException(status_code=404, detail="Bridge not found")
@@ -653,7 +659,7 @@ def get_bridge_forecast(
     if not risks:
         raise HTTPException(status_code=404, detail="No historical risk data available for forecasting")
         
-    risks.reverse() # chronologically ascending
+    risks.reverse()  # chronologically ascending
     
     history_data = []
     for r in risks:
@@ -668,11 +674,44 @@ def get_bridge_forecast(
             "risk_score": r.risk_score,
             "sensor_val": vib_val
         })
+
+    # Seed only stores 1 risk row per bridge today — expand from recent telemetry so trends work
+    if len(history_data) < 3:
+        readings = (
+            db.query(SensorReadingModel)
+            .filter(SensorReadingModel.bridge_id == bridge_id)
+            .order_by(desc(SensorReadingModel.timestamp))
+            .limit(40)
+            .all()
+        )
+        if len(readings) < 3:
+            raise HTTPException(status_code=404, detail="Not enough telemetry history for forecasting")
+
+        readings = list(reversed(readings))  # oldest → newest
+
+        base_risk = float(history_data[-1]["risk_score"])
+        vibs = [float(r.vibration_g) if r.vibration_g is not None else 0.05 for r in readings]
+        mean_v = float(np.mean(vibs)) if vibs else 0.05
+        if mean_v < 1e-6:
+            mean_v = 0.05
+
+        history_data = []
+        for r in readings:
+            vib = float(r.vibration_g) if r.vibration_g is not None else mean_v
+            adj = ((vib - mean_v) / mean_v) * 8.0
+            history_data.append({
+                "timestamp": str(r.timestamp),
+                "risk_score": float(np.clip(base_risk + adj, 0.0, 100.0)),
+                "sensor_val": vib,
+            })
         
     if method == "exponential_smoothing":
         forecast_items_dicts = exponential_smoothing_forecast(history_data, horizon)
     else:
         forecast_items_dicts = rolling_regression_forecast(history_data, horizon)
+
+    if not forecast_items_dicts:
+        raise HTTPException(status_code=404, detail="Unable to build forecast from available history")
         
     forecast_items = [ForecastItem(**item) for item in forecast_items_dicts]
     

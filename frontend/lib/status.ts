@@ -1,22 +1,21 @@
-// UI/UX cleanup: dark-theme semantic status colors.
 import type { InspectionPriority } from "./api";
 
 export const STATUS = {
-  normal: { bg: "rgba(74,222,128,0.12)", fg: "#4ade80", label: "NORMAL" },
-  warning: { bg: "rgba(251,191,36,0.12)", fg: "#fbbf24", label: "WARNING" },
-  elevated: { bg: "rgba(251,146,60,0.12)", fg: "#fb923c", label: "ELEVATED" },
-  critical: { bg: "rgba(248,113,113,0.12)", fg: "#f87171", label: "HIGH ANOMALY" },
-  offline: { bg: "rgba(100,116,139,0.15)", fg: "#94a3b8", label: "OFFLINE" },
+  normal: { bg: "rgba(4,120,87,0.14)", fg: "#047857", label: "NORMAL" },
+  warning: { bg: "rgba(180,83,9,0.14)", fg: "#b45309", label: "WARNING" },
+  elevated: { bg: "rgba(194,65,12,0.14)", fg: "#c2410c", label: "ELEVATED" },
+  critical: { bg: "rgba(185,28,28,0.14)", fg: "#b91c1c", label: "HIGH ANOMALY" },
+  offline: { bg: "rgba(71,85,105,0.12)", fg: "#475569", label: "OFFLINE" },
 } as const;
 
 export const PRIORITY_STATUS: Record<
   InspectionPriority,
   { bg: string; fg: string; label: string; short: string }
 > = {
-  P1: { bg: "rgba(248,113,113,0.12)", fg: "#f87171", label: "P1 · Immediate", short: "P1" },
-  P2: { bg: "rgba(251,146,60,0.12)", fg: "#fb923c", label: "P2 · Scheduled", short: "P2" },
-  P3: { bg: "rgba(251,191,36,0.12)", fg: "#fbbf24", label: "P3 · Routine", short: "P3" },
-  P4: { bg: "rgba(74,222,128,0.12)", fg: "#4ade80", label: "P4 · Normal", short: "P4" },
+  P1: { bg: "rgba(185,28,28,0.12)", fg: "#b91c1c", label: "P1 · Immediate", short: "P1" },
+  P2: { bg: "rgba(194,65,12,0.12)", fg: "#c2410c", label: "P2 · Scheduled", short: "P2" },
+  P3: { bg: "rgba(180,83,9,0.12)", fg: "#b45309", label: "P3 · Routine", short: "P3" },
+  P4: { bg: "rgba(4,120,87,0.12)", fg: "#047857", label: "P4 · Normal", short: "P4" },
 };
 
 export function riskToPriority(score: number): InspectionPriority {

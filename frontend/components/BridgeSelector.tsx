@@ -26,7 +26,7 @@ export default function BridgeSelector({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={loading || bridges.length === 0}
-        className="w-full appearance-none rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] py-3 pl-4 pr-10 text-[14px] font-medium text-[var(--color-ink)] shadow-sm outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)] disabled:opacity-50"
+        className="w-full appearance-none rounded-[var(--radius-btn)] border border-[var(--color-hairline)] bg-[var(--color-surface)] py-2.5 pl-3.5 pr-10 text-[14px] font-medium text-[var(--color-ink)] shadow-[var(--shadow-btn)] outline-none transition-all focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)] disabled:opacity-50"
       >
         {loading && <option>Loading…</option>}
         {!loading && bridges.length === 0 && <option>No structures</option>}

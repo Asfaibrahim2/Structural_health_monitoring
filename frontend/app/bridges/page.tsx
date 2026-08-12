@@ -14,15 +14,14 @@ export default async function FleetRegistryPage() {
   return (
     <>
       <PageHeader
-        title="Fleet Registry"
-        description="All monitored Telangana structures with live risk indicators, sensor counts, and scenario profiles."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Fleet Registry" }]}
+        title="Fleet"
+        description="All monitored bridges sorted by risk."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {sorted.map((b) => (
           <Link key={b.bridge_id} href={`/bridges/${b.bridge_id}`}>
-            <Card className="group h-full transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-structural)]/30 hover:shadow-md">
+            <Card className="group h-full hover:border-[var(--color-hairline-strong)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-[family-name:var(--font-mono)] text-[11px] text-[var(--color-ink-muted)]">

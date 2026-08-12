@@ -29,15 +29,26 @@ export default function SensorDetailPanel({
   const raw = reading?.[node.field];
   const current = raw != null && typeof raw === "number" ? (node.id === "S03" ? raw * 0.98 : raw) : null;
 
-  // Learned baseline estimate from fleet norms + bridge type
-  const baselines: Record<string, number> = {
+  // Prefer adaptive Ridge expected value from API (time-varying); fallback to last-resort constants
+  const expectedMap: Record<string, number | null | undefined> = {
+    strain_microstrain: reading?.strain_microstrain_expected,
+    vibration_g: reading?.vibration_g_expected,
+    displacement_mm: reading?.displacement_mm_expected,
+    temperature_c: reading?.temperature_c,
+  };
+  const fallback: Record<string, number> = {
     strain_microstrain: 105,
     vibration_g: 0.21,
     displacement_mm: 2.2,
     temperature_c: 29,
   };
-  const baseline = baselines[node.field as string] ?? 0;
-  const deviation = current != null && baseline > 0 ? ((current - baseline) / baseline) * 100 : null;
+  const adaptive = expectedMap[node.field as string];
+  const baseline =
+    adaptive != null && typeof adaptive === "number"
+      ? adaptive
+      : (fallback[node.field as string] ?? 0);
+  const isAdaptive = adaptive != null && typeof adaptive === "number";
+  const deviation = current != null && baseline !== 0 ? ((current - baseline) / Math.abs(baseline)) * 100 : null;
   const st = healthStatus(health?.health_score ?? 85);
 
   return (
@@ -63,7 +74,10 @@ export default function SensorDetailPanel({
 
       <dl className="mt-5 grid gap-3 sm:grid-cols-2">
         <Metric label="Current reading" value={current != null ? `${node.format(current)} ${node.unit}` : "—"} />
-        <Metric label="Learned baseline" value={`${baseline} ${node.unit}`} />
+        <Metric
+          label={isAdaptive ? "Adaptive expected (Ridge)" : "Baseline (fallback)"}
+          value={`${typeof baseline === "number" ? (node.field === "vibration_g" ? baseline.toFixed(4) : baseline.toFixed(2)) : baseline} ${node.unit}`}
+        />
         <Metric
           label="Deviation"
           value={deviation != null ? `${deviation >= 0 ? "+" : ""}${deviation.toFixed(1)}%` : "—"}

@@ -33,13 +33,15 @@ export default function ForecastCard({ bridgeId }: { bridgeId: string }) {
         throw new Error("Forecast failed");
       })
       .then((data) => {
-        setForecast(data.forecast);
+        setForecast(data.forecast ?? []);
       })
-      .catch((err) => console.error(err))
+      .catch((err) => {
+        console.error(err);
+        setForecast([]);
+      })
       .finally(() => setLoading(false));
   }, [bridgeId, horizon, method]);
 
-  // Map data for charts
   const chartData = forecast.map((item) => {
     const time = new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     return {
@@ -47,9 +49,11 @@ export default function ForecastCard({ bridgeId }: { bridgeId: string }) {
       risk: item.risk_score,
       riskLower: Math.max(0, item.risk_lower),
       riskUpper: Math.min(100, item.risk_upper),
+      riskBand: Math.max(0, Math.min(100, item.risk_upper) - Math.max(0, item.risk_lower)),
       sensor: item.sensor_trend,
       sensorLower: Math.max(0, item.sensor_lower),
       sensorUpper: item.sensor_upper,
+      sensorBand: Math.max(0, item.sensor_upper - Math.max(0, item.sensor_lower)),
     };
   });
 
@@ -63,55 +67,56 @@ export default function ForecastCard({ bridgeId }: { bridgeId: string }) {
   const finalForecast = forecast[forecast.length - 1];
 
   return (
-    <Card className="shadow-[var(--shadow-card)] space-y-4">
+    <Card className="space-y-4">
       <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-3">
         <div className="flex items-center gap-2">
-          <TrendingUp className="text-[var(--color-accent-bright)]" size={18} />
-          <h3 className="font-[family-name:var(--font-display)] text-[15px] font-bold">
-            Trend Projection
-          </h3>
+          <TrendingUp className="text-[var(--color-accent)]" size={18} />
+          <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">Trend projection</h3>
         </div>
-        <div className="flex gap-1.5 bg-[var(--color-surface-sunken)] p-1 rounded-lg border border-[var(--color-hairline)]">
+        <div className="flex gap-1 rounded-[var(--radius-btn)] border border-[var(--color-hairline)] bg-[var(--color-surface-sunken)] p-1">
           {(["risk", "sensor"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`rounded px-2.5 py-1 text-[11px] font-bold capitalize transition-all ${
+              className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors ${
                 activeTab === tab
-                  ? "bg-[var(--color-accent)] text-[var(--color-bg)]"
-                  : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                  ? "bg-white text-[var(--color-accent)] shadow-sm"
+                  : "text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]"
               }`}
             >
-              {tab === "risk" ? "Risk Score" : "Vibration"}
+              {tab === "risk" ? "Risk score" : "Vibration"}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Configuration Controls */}
-      <div className="grid grid-cols-2 gap-3 text-[12px] bg-[var(--color-surface-sunken)] p-3 rounded-xl border border-[var(--color-hairline)]">
+      <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-card)] border border-[var(--color-hairline)] bg-[var(--color-surface)] p-3 text-[12px]">
         <div>
-          <label className="text-[10px] uppercase font-bold text-[var(--color-ink-muted)] block mb-1">Method</label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--color-ink-secondary)]">
+            Method
+          </label>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value)}
-            className="w-full bg-[var(--color-surface)] border border-[var(--color-hairline)] rounded-lg px-2 py-1 text-[11px] text-[var(--color-ink)]"
+            className="w-full rounded-[var(--radius-btn)] border border-[var(--color-hairline)] bg-white px-2 py-1.5 text-[12px] font-medium text-[var(--color-ink)]"
           >
-            <option value="rolling_regression">Rolling Linear Trend</option>
-            <option value="exponential_smoothing">Holt Linear smoothing</option>
+            <option value="rolling_regression">Rolling linear trend</option>
+            <option value="exponential_smoothing">Holt linear smoothing</option>
           </select>
         </div>
         <div>
-          <label className="text-[10px] uppercase font-bold text-[var(--color-ink-muted)] block mb-1">Horizon</label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--color-ink-secondary)]">
+            Horizon
+          </label>
           <div className="flex gap-1">
             {[5, 10, 15, 20].map((h) => (
               <button
                 key={h}
                 onClick={() => setHorizon(h)}
-                className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                className={`flex-1 rounded-[var(--radius-btn)] border py-1.5 text-[11px] font-semibold transition-colors ${
                   horizon === h
-                    ? "bg-[var(--color-surface)] border-[var(--color-accent)] text-[var(--color-accent-bright)]"
-                    : "bg-[var(--color-surface)] border-[var(--color-hairline)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                    : "border-[var(--color-hairline)] bg-white text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)]"
                 }`}
               >
                 {h}m
@@ -121,81 +126,78 @@ export default function ForecastCard({ bridgeId }: { bridgeId: string }) {
         </div>
       </div>
 
-      {/* Projection Chart */}
-      <div className="h-[150px] w-full rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface-sunken)]/40 p-2">
+      <div className="h-[160px] w-full rounded-[var(--radius-card)] border border-[var(--color-hairline)] bg-white p-2">
         {loading ? (
-          <div className="flex h-full w-full items-center justify-center text-[12px] text-[var(--color-ink-muted)]">
-            Calculating projection...
+          <div className="flex h-full w-full items-center justify-center text-[12px] text-[var(--color-ink-secondary)]">
+            Calculating projection…
           </div>
         ) : chartData.length === 0 ? (
-          <div className="flex h-full w-full items-center justify-center text-[12px] text-[var(--color-ink-muted)]">
+          <div className="flex h-full w-full items-center justify-center text-[12px] text-[var(--color-ink-secondary)]">
             No history to project.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-              <XAxis dataKey="time" tick={{ fill: "var(--color-ink-muted)", fontSize: 10 }} axisLine={false} tickLine={false} />
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <XAxis dataKey="time" tick={{ fill: "#4b5563", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis
                 domain={activeTab === "risk" ? [0, 100] : ["auto", "auto"]}
-                tick={{ fill: "var(--color-ink-muted)", fontSize: 10 }}
+                tick={{ fill: "#4b5563", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
               />
-              <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
               <ChartTooltip
-                contentStyle={{ background: "#0d1420", border: "1px solid var(--color-hairline)", borderRadius: 8 }}
-                labelStyle={{ fontSize: 10, color: "var(--color-ink-muted)" }}
-                itemStyle={{ fontSize: 11, color: "var(--color-ink)" }}
+                contentStyle={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  color: "#111827",
+                  boxShadow: "0 4px 12px rgba(17,24,39,0.08)",
+                }}
+                labelStyle={{ fontSize: 10, color: "#6b7280" }}
+                itemStyle={{ fontSize: 11, color: "#111827" }}
               />
               {activeTab === "risk" ? (
                 <>
+                  <Area type="monotone" dataKey="riskLower" stackId="band" stroke="none" fill="transparent" />
                   <Area
                     type="monotone"
-                    dataKey="riskUpper"
+                    dataKey="riskBand"
+                    stackId="band"
                     stroke="none"
-                    fill="var(--color-accent)"
-                    fillOpacity={0.06}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="riskLower"
-                    stroke="none"
-                    fill="#0d1420"
-                    fillOpacity={1}
+                    fill="#0f766e"
+                    fillOpacity={0.12}
+                    name="Range"
                   />
                   <Area
                     type="monotone"
                     dataKey="risk"
-                    stroke="var(--color-accent-bright)"
+                    stroke="#0f766e"
                     strokeWidth={2}
-                    fill="var(--color-accent)"
-                    fillOpacity={0.12}
+                    fill="#0f766e"
+                    fillOpacity={0.08}
                     name="Risk projection"
                   />
                 </>
               ) : (
                 <>
+                  <Area type="monotone" dataKey="sensorLower" stackId="sband" stroke="none" fill="transparent" />
                   <Area
                     type="monotone"
-                    dataKey="sensorUpper"
+                    dataKey="sensorBand"
+                    stackId="sband"
                     stroke="none"
-                    fill="var(--color-orange)"
-                    fillOpacity={0.06}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="sensorLower"
-                    stroke="none"
-                    fill="#0d1420"
-                    fillOpacity={1}
+                    fill="#ea580c"
+                    fillOpacity={0.12}
+                    name="Range"
                   />
                   <Area
                     type="monotone"
                     dataKey="sensor"
-                    stroke="var(--color-orange)"
+                    stroke="#ea580c"
                     strokeWidth={2}
-                    fill="var(--color-orange)"
-                    fillOpacity={0.12}
+                    fill="#ea580c"
+                    fillOpacity={0.08}
                     name="Vibration projection"
                   />
                 </>
@@ -206,26 +208,25 @@ export default function ForecastCard({ bridgeId }: { bridgeId: string }) {
       </div>
 
       {finalForecast && (
-        <div className="space-y-2 border-t border-[var(--color-hairline)] pt-3 text-[12.5px]">
+        <div className="space-y-2 border-t border-[var(--color-hairline)] pt-3 text-[13px]">
           <div className="flex items-center justify-between">
-            <span className="text-[var(--color-ink-muted)]">Projected Risk boundary</span>
-            <span className="font-mono font-bold text-[var(--color-ink)]">
-              {finalForecast.risk_lower.toFixed(0)} - {finalForecast.risk_upper.toFixed(0)}
+            <span className="text-[var(--color-ink-secondary)]">Projected risk range</span>
+            <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--color-ink)]">
+              {finalForecast.risk_lower.toFixed(0)} – {finalForecast.risk_upper.toFixed(0)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[var(--color-ink-muted)]">Projected Priority band</span>
+            <span className="text-[var(--color-ink-secondary)]">Projected priority</span>
             <PriorityBadge priority={getSimulatedPriority(finalForecast.risk_score)} compact />
           </div>
         </div>
       )}
 
-      {/* Info & Warning */}
-      <div className="flex gap-2 rounded-lg bg-[var(--color-surface-sunken)] p-3 border border-[var(--color-hairline)] text-[12px] leading-relaxed text-[var(--color-ink-muted)]">
-        <Info className="text-[var(--color-accent)] shrink-0 mt-0.5" size={15} />
+      <div className="flex gap-2 rounded-[var(--radius-card)] border border-[var(--color-hairline)] bg-[var(--color-surface-sunken)] p-3 text-[12px] leading-relaxed text-[var(--color-ink-secondary)]">
+        <Info className="mt-0.5 shrink-0 text-[var(--color-accent)]" size={15} />
         <div>
-          <span className="font-semibold text-[var(--color-ink)] block">Statistical Trend Boundary</span>
-          Expected risk indicator and telemetry limits projected over the selected time horizon.
+          <span className="mb-0.5 block font-semibold text-[var(--color-ink)]">Statistical trend boundary</span>
+          Expected risk and telemetry range over the selected horizon.
         </div>
       </div>
     </Card>

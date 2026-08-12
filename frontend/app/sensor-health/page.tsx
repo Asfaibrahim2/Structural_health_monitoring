@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { api, type SensorHealth } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import Disclaimer from "@/components/Disclaimer";
 import BridgeSelector from "@/components/BridgeSelector";
 import { Card } from "@/components/Card";
 import { LoadingState, EmptyState, ErrorState } from "@/components/ui/AsyncState";
@@ -40,9 +39,8 @@ export default function SensorHealthPage() {
   return (
     <>
       <PageHeader
-        title="Sensor Health"
-        description="Monitor sensor reliability — health score, dropout, flatline, noise, drift, and last update. Status uses text labels plus color for accessibility."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Sensor Health" }]}
+        title="Sensor health"
+        description="Reliability scores, dropout, noise, and drift flags."
       />
 
       <div className="mb-6 flex flex-wrap items-end gap-4">

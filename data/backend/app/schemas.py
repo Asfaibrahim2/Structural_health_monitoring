@@ -44,6 +44,17 @@ class SensorReadingBase(BaseModel):
     wind_speed_mps: Optional[float] = None
     scenario: str
     ground_truth_anomaly: int
+    # Adaptive baseline (Ridge) — time-varying expected values, not a static mean
+    strain_microstrain_expected: Optional[float] = None
+    vibration_g_expected: Optional[float] = None
+    displacement_mm_expected: Optional[float] = None
+    strain_microstrain_lower: Optional[float] = None
+    strain_microstrain_upper: Optional[float] = None
+    vibration_g_lower: Optional[float] = None
+    vibration_g_upper: Optional[float] = None
+    displacement_mm_lower: Optional[float] = None
+    displacement_mm_upper: Optional[float] = None
+    baseline_mode: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { api, type BridgeSummary, type SensorHealth, type SensorReading, type RiskAssessment } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import Disclaimer from "@/components/Disclaimer";
 import DigitalTwinSvg, { TWIN_NODES } from "@/components/DigitalTwinSvg";
 import SensorDetailPanel from "@/components/SensorDetailPanel";
 import BridgeSelector from "@/components/BridgeSelector";
@@ -34,10 +33,16 @@ export default function SensorsPage() {
     if (!bridgeId) return;
     setLoading(true);
     setError(false);
-    Promise.all([api.sensorHealth(bridgeId), api.bridgeLatest(bridgeId)])
-      .then(([h, latest]) => {
+    Promise.all([
+      api.sensorHealth(bridgeId),
+      api.bridgeLatest(bridgeId),
+      api.timeseries(bridgeId, 120).catch(() => [] as SensorReading[]),
+    ])
+      .then(([h, latest, ts]) => {
         setHealth(h);
-        setReading(latest.latest_reading);
+        // Prefer last timeseries point (includes adaptive expected); fallback to latest_reading
+        const withBaseline = [...ts].reverse().find((r) => r.strain_microstrain_expected != null) ?? ts[ts.length - 1];
+        setReading(withBaseline ?? latest.latest_reading);
         setRisk(latest.latest_risk);
       })
       .catch(() => setError(true))
@@ -51,13 +56,12 @@ export default function SensorsPage() {
   return (
     <>
       <PageHeader
-        title="Digital Twin"
-        description="Simplified bridge model with 5 sensor nodes. Green = normal, yellow = warning, red = critical. Click any sensor to see readings, baseline, deviation, health, and confidence."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Digital Twin" }]}
+        title="Digital twin"
+        description="Bridge model with sensor nodes, readings, and adaptive expected values."
       />
 
-      <div className="mb-6 max-w-md">
-        <label className="text-label mb-2 block">Select structure</label>
+      <div className="mb-5 max-w-sm">
+        <label className="mb-1.5 block text-[12px] font-medium text-[var(--color-ink-muted)]">Bridge</label>
         <BridgeSelector value={bridgeId} onChange={setBridgeId} />
       </div>
 

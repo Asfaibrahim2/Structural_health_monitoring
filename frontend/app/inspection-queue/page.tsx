@@ -3,13 +3,12 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { api, type InspectionQueueItem, type InspectionPriority } from "@/lib/api";
-import { getBridgePersonality, getPlainMainReason } from "@/lib/bridgeHelpers";
+import { getPlainMainReason } from "@/lib/bridgeHelpers";
 import { Card } from "@/components/Card";
 import PriorityBadge from "@/components/PriorityBadge";
 import PageHeader from "@/components/PageHeader";
-import Disclaimer from "@/components/Disclaimer";
 import Tooltip from "@/components/Tooltip";
-import { TOOLTIPS, PRIORITY_STATUS } from "@/lib/status";
+import { TOOLTIPS } from "@/lib/status";
 import { LoadingState, EmptyState, ErrorState } from "@/components/ui/AsyncState";
 import clsx from "clsx";
 import { ArrowUpDown } from "lucide-react";
@@ -84,40 +83,38 @@ export default function InspectionQueuePage() {
   return (
     <>
       <PageHeader
-        title="Inspection Queue"
-        description="Sortable priority table — the main decision-support output. Each row shows risk, confidence, uncertainty, main reason, and recommended action."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Inspection Queue" }]}
+        title="Inspection queue"
+        description="Prioritized bridges with risk, confidence, and recommended action."
       />
 
-      {/* Filters row */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        {/* Priority Filter */}
-        <div className="flex flex-wrap gap-2">
-          {(["ALL", "P1", "P2", "P3", "P4"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setFilter(p)}
-              className={clsx("rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors", filter === p && "ring-2 ring-[var(--color-accent)]")}
-              style={p === "ALL" ? { background: "var(--color-grey-soft)", color: "var(--color-ink)" } : { background: PRIORITY_STATUS[p].bg, color: PRIORITY_STATUS[p].fg }}
-            >
-              {p === "ALL" ? `All (${queue.length})` : `${p} (${counts[p]})`}
-            </button>
-          ))}
-        </div>
-
-        {/* Mode Filter */}
-        <div className="flex items-center gap-1 bg-[var(--color-surface-sunken)] p-1 rounded-xl border border-[var(--color-hairline)] shadow-inner">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(["ALL", "P1", "P2", "P3", "P4"] as const).map((p) => (
+          <button
+            key={p}
+            onClick={() => setFilter(p)}
+            className={clsx(
+              "rounded-[var(--radius-btn)] border px-3 py-1.5 text-[12px] font-medium transition-colors",
+              filter === p
+                ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                : "border-[var(--color-hairline)] bg-[var(--color-surface)] text-[var(--color-ink-secondary)] hover:bg-[var(--color-surface-hover)]"
+            )}
+          >
+            {p === "ALL" ? `All (${queue.length})` : `${p} (${counts[p]})`}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-1 rounded-[var(--radius-btn)] border border-[var(--color-hairline)] bg-[var(--color-surface)] p-0.5">
           {(["BOTH", "SYNTHETIC", "HARDWARE"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setModeFilter(m)}
-              className={`rounded-lg px-3 py-1.5 text-[12px] font-bold capitalize transition-all duration-200 ${
+              className={clsx(
+                "rounded-[5px] px-2.5 py-1 text-[11px] font-medium capitalize",
                 modeFilter === m
-                  ? "bg-[var(--color-accent)] text-[var(--color-bg)] shadow-[0_0_12px_rgba(56,189,248,0.25)]"
-                  : "bg-transparent text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-              }`}
+                  ? "bg-[var(--color-ink)] text-white"
+                  : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+              )}
             >
-              {m.toLowerCase()} mode
+              {m.toLowerCase()}
             </button>
           ))}
         </div>
@@ -140,7 +137,7 @@ export default function InspectionQueuePage() {
                   <th className="px-4 py-3.5"><SortHeader label="Uncertainty (±)" col="uncertainty" /></th>
                   <th className="px-4 py-3.5"><SortHeader label="Priority" col="priority" /></th>
                   <th className="px-4 py-3.5">Main reason</th>
-                  <th className="px-4 py-3.5">Recommended action</th>
+                  <th className="px-4 py-3.5 min-w-[280px]">Recommended action</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,16 +146,15 @@ export default function InspectionQueuePage() {
                     <td className="px-4 py-4 font-mono text-[var(--color-ink-muted)] text-center">{String(i + 1).padStart(2, "0")}</td>
                     <td className="px-4 py-4">
                       <Link href={`/bridges/${item.bridge_id}`} className="font-semibold hover:text-[var(--color-accent)]">{item.bridge_name}</Link>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="mt-1 flex items-center gap-2">
                         <span className="font-mono text-[11px] text-[var(--color-ink-muted)]">{item.bridge_id}</span>
                         <span className={clsx(
-                          "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
-                          item.bridge_id === "TS-STR-001" ? "bg-[var(--color-accent-soft)] text-[var(--color-accent-bright)]" : "bg-[var(--color-grey-soft)] text-[var(--color-ink-muted)]"
+                          "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                          item.bridge_id === "TS-STR-001" ? "bg-[var(--color-accent-soft)] text-[var(--color-accent)]" : "bg-[var(--color-grey-soft)] text-[var(--color-ink-muted)]"
                         )}>
                           {item.bridge_id === "TS-STR-001" ? "Hardware" : "Synthetic"}
                         </span>
                       </div>
-                      <p className="text-[11.5px] italic text-[var(--color-accent-bright)] mt-1.5 leading-snug">{getBridgePersonality(item)}</p>
                     </td>
                     <td className="px-4 py-4 font-mono">
                       <span
@@ -189,7 +185,7 @@ export default function InspectionQueuePage() {
                     <td className="px-4 py-4 font-mono text-[var(--color-ink-muted)]">±{item.uncertainty.toFixed(1)}</td>
                     <td className="px-4 py-4"><PriorityBadge priority={item.inspection_priority} /></td>
                     <td className="max-w-[240px] px-4 py-4 text-[13px] text-[var(--color-ink-secondary)] leading-relaxed">{getPlainMainReason(item)}</td>
-                    <td className="max-w-[180px] px-4 py-4 text-[13px] font-medium text-[var(--color-ink)]">{item.recommended_action ?? "Continue monitoring"}</td>
+                    <td className="max-w-[340px] px-4 py-4 text-[12.5px] leading-snug font-medium text-[var(--color-ink-secondary)]">{item.recommended_action ?? "Continue monitoring"}</td>
                   </tr>
                 ))}
               </tbody>

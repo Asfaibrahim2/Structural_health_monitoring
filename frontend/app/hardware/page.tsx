@@ -4,7 +4,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import Disclaimer from "@/components/Disclaimer";
 import { Card } from "@/components/Card";
 import StatusChip from "@/components/StatusChip";
 import PriorityBadge from "@/components/PriorityBadge";
@@ -118,19 +117,10 @@ export default function HardwarePage() {
   return (
     <>
       <PageHeader
-        eyebrow="System B · Independent Demo"
-        title="Hardware Prototype"
-        description="ESP32 mini-bridge with MPU6050, displacement sensor, and local LED/OLED risk indication. Runs independently — no connection to the AI software dashboard required."
-        breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Hardware Prototype" }]}
+        title="Hardware"
+        description="ESP32 prototype status, live or demo readings, and local risk indication."
       />
-      <Disclaimer className="mb-4" />
 
-      <Card className="mb-6 border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)]/40">
-        <p className="text-[13px] leading-relaxed text-[var(--color-ink-secondary)]">
-          <strong className="text-[var(--color-ink)]">Hackathon strategy:</strong> The hardware demonstrates the physical sensing layer (vibration, displacement, local LEDs).
-          The software platform uses synthetic data for the full AI monitoring pipeline. They are shown together conceptually but do not depend on each other.
-        </p>
-      </Card>
 
       {/* Status strip */}
       <Card className="mb-6 flex flex-wrap items-center gap-4 shadow-[var(--shadow-card)]">

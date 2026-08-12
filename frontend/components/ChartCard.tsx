@@ -12,10 +12,10 @@ export default function ChartCard({
   className?: string;
 }) {
   return (
-    <Card className={className}>
-      <h3 className="font-[family-name:var(--font-display)] text-[18px] font-bold text-[var(--color-ink)]">{title}</h3>
-      <p className="mt-1.5 text-[14px] font-medium text-[var(--color-ink-muted)]">{subtitle}</p>
-      <div className="mt-6">{children}</div>
+    <Card className={`card-interactive ${className}`} hover>
+      <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">{title}</h3>
+      <p className="mt-0.5 text-[12px] text-[var(--color-ink-muted)]">{subtitle}</p>
+      <div className="mt-4 animate-fade-in stagger-2">{children}</div>
     </Card>
   );
 }

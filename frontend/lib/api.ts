@@ -47,6 +47,17 @@ export interface SensorReading {
   wind_speed_mps: number | null;
   scenario: string;
   ground_truth_anomaly: number;
+  // Adaptive Ridge baseline (time-varying — not a static mean)
+  strain_microstrain_expected?: number | null;
+  vibration_g_expected?: number | null;
+  displacement_mm_expected?: number | null;
+  strain_microstrain_lower?: number | null;
+  strain_microstrain_upper?: number | null;
+  vibration_g_lower?: number | null;
+  vibration_g_upper?: number | null;
+  displacement_mm_lower?: number | null;
+  displacement_mm_upper?: number | null;
+  baseline_mode?: string | null;
 }
 
 export interface RiskAssessment {

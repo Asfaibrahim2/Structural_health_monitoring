@@ -7,7 +7,6 @@ export interface Breadcrumb {
 }
 
 export default function PageHeader({
-  eyebrow,
   title,
   description,
   breadcrumbs,
@@ -20,42 +19,34 @@ export default function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <header className="mb-10">
+    <header className="mb-6 animate-fade-up">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-[14px] text-[var(--color-ink-muted)]">
+        <nav className="mb-2 flex flex-wrap items-center gap-1 text-[13px] text-[var(--color-ink-muted)]">
           {breadcrumbs.map((crumb, i) => (
-            <span key={crumb.label} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRight size={14} className="opacity-40" />}
+            <span key={crumb.label} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight size={12} className="opacity-50" />}
               {crumb.href ? (
-                <Link href={crumb.href} className="font-medium transition-colors hover:text-[var(--color-accent-bright)]">
+                <Link href={crumb.href} className="transition-colors hover:text-[var(--color-ink)]">
                   {crumb.label}
                 </Link>
               ) : (
-                <span className="font-semibold text-[var(--color-ink-secondary)]">{crumb.label}</span>
+                <span className="text-[var(--color-ink-secondary)]">{crumb.label}</span>
               )}
             </span>
           ))}
         </nav>
       )}
-      <div className="flex flex-wrap items-end justify-between gap-6">
-        <div className="max-w-3xl">
-          {eyebrow && (
-            <p className="mb-3 inline-flex items-center rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-4 py-1.5 text-[12px] font-bold uppercase tracking-widest text-[var(--color-accent-bright)]">
-              {eyebrow}
-            </p>
-          )}
-          <h1 className="text-display text-[clamp(2rem,5vw,3rem)] gradient-text">
-            {title}
-          </h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-2xl">
+          <h1 className="text-display text-[var(--text-2xl)]">{title}</h1>
           {description && (
-            <p className="mt-4 text-[17px] font-medium leading-relaxed text-[var(--color-ink-muted)]">
+            <p className="mt-1.5 text-[var(--text-md)] leading-relaxed text-[var(--color-ink-muted)]">
               {description}
             </p>
           )}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="shrink-0 animate-fade-in stagger-2">{action}</div>}
       </div>
-      <div className="mt-6 h-px w-full max-w-xs bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-accent)]/30 to-transparent" />
     </header>
   );
 }

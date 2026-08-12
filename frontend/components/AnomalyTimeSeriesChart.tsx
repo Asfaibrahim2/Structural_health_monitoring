@@ -1,11 +1,17 @@
 "use client";
 
 import {
-  ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea,
+  ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceArea,
 } from "recharts";
 import type { SensorReading, AnomalyEvent } from "@/lib/api";
 
-function computeBaseline(values: number[]): number {
+const EXPECTED_KEY: Record<string, keyof SensorReading> = {
+  strain_microstrain: "strain_microstrain_expected",
+  vibration_g: "vibration_g_expected",
+  displacement_mm: "displacement_mm_expected",
+};
+
+function computeBaselineFallback(values: number[]): number {
   if (!values.length) return 0;
   const normal = values.slice(0, Math.max(1, Math.floor(values.length * 0.35)));
   return normal.reduce((a, b) => a + b, 0) / normal.length;
@@ -26,16 +32,20 @@ export default function AnomalyTimeSeriesChart({
   color: string;
   events?: AnomalyEvent[];
 }) {
+  const expectedKey = EXPECTED_KEY[String(dataKey)];
   const values = readings.map((r) => r[dataKey] as number | null).filter((v): v is number => v != null);
-  const baseline = computeBaseline(values);
+  const fallback = computeBaselineFallback(values);
 
-  const data = readings.map((r, i) => ({
-    idx: i,
-    time: new Date(r.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    value: r[dataKey] as number | null,
-    baseline,
-    anomaly: r.ground_truth_anomaly === 1,
-  }));
+  const data = readings.map((r, i) => {
+    const adaptive = expectedKey ? (r[expectedKey] as number | null) : null;
+    return {
+      idx: i,
+      time: new Date(r.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      value: r[dataKey] as number | null,
+      baseline: adaptive != null && typeof adaptive === "number" ? adaptive : fallback,
+      anomaly: r.ground_truth_anomaly === 1,
+    };
+  });
 
   const anomalyRanges: { x1: number; x2: number }[] = [];
   let start: number | null = null;
@@ -48,21 +58,42 @@ export default function AnomalyTimeSeriesChart({
   });
   if (start !== null) anomalyRanges.push({ x1: start, x2: data.length - 1 });
 
-  const latest = values[values.length - 1];
-  const deviation = baseline > 0 && latest != null ? ((latest - baseline) / baseline) * 100 : 0;
+  const latest = [...data].reverse().find((d) => d.value != null)?.value ?? null;
+  const latestBaseline = [...data].reverse().find((d) => d.baseline != null)?.baseline ?? fallback;
+  const deviation =
+    latest != null && Math.abs(latestBaseline) > 1e-9
+      ? ((latest - latestBaseline) / Math.abs(latestBaseline)) * 100
+      : 0;
 
   return (
-    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface-sunken)] p-4">
+    <div className="rounded-[var(--radius-card)] border border-[var(--color-hairline)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-[14px] font-semibold text-[var(--color-ink)]">{label}</p>
           <p className="text-[12px] text-[var(--color-ink-muted)]">
-            Baseline <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--color-ink)]">{baseline.toFixed(2)} {unit}</span>
+            Baseline{" "}
+            <span className="font-[family-name:var(--font-mono)] font-semibold text-[var(--color-ink)]">
+              {latestBaseline.toFixed(2)} {unit}
+            </span>
             {latest != null && (
-              <> · Current <span className="font-[family-name:var(--font-mono)] font-semibold">{latest.toFixed(2)} {unit}</span>
-              <span className={deviation > 10 ? " text-[var(--color-brick)]" : deviation < -10 ? " text-[var(--color-sage)]" : ""}>
-                {" "}({deviation >= 0 ? "+" : ""}{deviation.toFixed(1)}%)
-              </span></>
+              <>
+                {" "}
+                · Current{" "}
+                <span className="font-[family-name:var(--font-mono)] font-semibold">{latest.toFixed(2)} {unit}</span>
+                <span
+                  className={
+                    deviation > 10
+                      ? " text-[var(--color-brick)]"
+                      : deviation < -10
+                        ? " text-[var(--color-sage)]"
+                        : ""
+                  }
+                >
+                  {" "}
+                  ({deviation >= 0 ? "+" : ""}
+                  {deviation.toFixed(1)}%)
+                </span>
+              </>
             )}
           </p>
         </div>
