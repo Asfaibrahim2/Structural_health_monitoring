@@ -70,8 +70,8 @@ export default function SensorDetailPanel({
           warn={deviation != null && Math.abs(deviation) > 15}
         />
         <Metric label="Sensor health" value={health ? `${health.health_score.toFixed(0)}%` : "—"} />
-        <Metric label="Model confidence" value={risk ? `${risk.confidence_score.toFixed(0)}%` : "—"} />
-        <Metric label="Uncertainty" value={risk ? `±${risk.uncertainty.toFixed(1)}` : "—"} />
+        <Metric label="Model confidence (%)" value={risk ? `${risk.confidence_score.toFixed(0)}%` : "—"} />
+        <Metric label="Uncertainty (± points)" value={risk ? `±${risk.uncertainty.toFixed(1)}` : "—"} />
       </dl>
 
       {health && (

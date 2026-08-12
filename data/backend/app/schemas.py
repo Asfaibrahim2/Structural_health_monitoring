@@ -200,3 +200,37 @@ class AssistantQueryResponse(BaseModel):
     answer: str
     data_sources_used: List[str]
     suggested_actions: List[str]
+
+
+# Event Replay Schemas
+class ReplayStageItem(BaseModel):
+    stage: str
+    timestamp: str
+    vibration_g: float
+    strain_microstrain: float
+    displacement_mm: float
+    risk_score: float
+    explanation: str
+
+class EventReplayResponse(BaseModel):
+    event_id: int
+    bridge_id: str
+    anomaly_type: str
+    stages: List[ReplayStageItem]
+
+
+# Trend Forecasting Schemas
+class ForecastItem(BaseModel):
+    timestamp: str
+    risk_score: float
+    risk_lower: float
+    risk_upper: float
+    sensor_trend: float
+    sensor_lower: float
+    sensor_upper: float
+
+class ForecastResponse(BaseModel):
+    bridge_id: str
+    horizon: int
+    method: str
+    forecast: List[ForecastItem]

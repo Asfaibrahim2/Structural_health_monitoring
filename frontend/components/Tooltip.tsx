@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle } from "lucide-react";
+import { Info } from "lucide-react";
 
 export default function Tooltip({ text, label = "Help" }: { text: string; label?: string }) {
   const [open, setOpen] = useState(false);
@@ -15,9 +15,9 @@ export default function Tooltip({ text, label = "Help" }: { text: string; label?
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="ml-1 inline-flex text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-accent)]"
+        className="ml-1 inline-flex text-[var(--color-ink-muted)] transition-colors hover:text-[var(--color-accent)] animate-pulse-soft"
       >
-        <HelpCircle size={13} />
+        <Info size={13} />
       </button>
       {open && (
         <span

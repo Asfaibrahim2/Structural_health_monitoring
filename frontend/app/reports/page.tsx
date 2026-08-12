@@ -23,6 +23,7 @@ function ReportsContent() {
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [health, setHealth] = useState<SensorHealth[]>([]);
   const [reportHtml, setReportHtml] = useState<string | null>(null);
+  const [reportId, setReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(false);
@@ -63,6 +64,7 @@ function ReportsContent() {
     try {
       const res = await api.generateReport(bridgeId, `Engineer Report — ${bridge.bridge_name}`);
       setReportHtml(res.report_html);
+      setReportId(res.report_id);
     } catch {
       alert("Report generation failed. Is the backend running?");
     } finally {
@@ -81,15 +83,19 @@ function ReportsContent() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadPdf() {
+    if (!reportId || !bridge) return;
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+    window.open(`${baseUrl}/api/reports/${reportId}/download`, "_blank");
+  }
+
   return (
     <>
       <PageHeader
-        eyebrow="Stage F · Page 6"
         title="Engineer Report"
         description="Select a bridge, review risk evidence, anomaly timeline, charts, and sensor health — then generate and download a full inspection report."
         breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Engineer Report" }]}
       />
-      <Disclaimer className="mb-6" />
 
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div className="min-w-[240px] flex-1 max-w-md">
@@ -105,12 +111,20 @@ function ReportsContent() {
           {generating ? "Generating…" : "Generate report"}
         </button>
         {reportHtml && (
-          <button
-            onClick={downloadReport}
-            className="flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] px-5 py-3 text-[14px] font-semibold hover:border-[var(--color-accent)]"
-          >
-            <Download size={16} /> Download HTML
-          </button>
+          <>
+            <button
+              onClick={downloadReport}
+              className="flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] px-5 py-3 text-[14px] font-semibold hover:border-[var(--color-accent)]"
+            >
+              <Download size={16} /> Download HTML
+            </button>
+            <button
+              onClick={downloadPdf}
+              className="flex items-center gap-2 rounded-xl border border-[var(--color-hairline)] px-5 py-3 text-[14px] font-semibold hover:border-[var(--color-accent)]"
+            >
+              <FileText size={16} /> Download PDF
+            </button>
+          </>
         )}
       </div>
 

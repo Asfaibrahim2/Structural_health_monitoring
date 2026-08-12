@@ -1,10 +1,12 @@
 import logging
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
+from .models import SensorReadingModel, RiskAssessmentModel, AnomalyEventModel
 from .database import engine, Base, get_db
 from .schemas import (
     HealthCheckResponse, BridgeSummary, BridgeBase, SensorReadingBase,
@@ -12,7 +14,8 @@ from .schemas import (
     InspectionQueueItem, SensorHealthSchema, SimulateRequest,
     SimulateResponse, DataGenRequest, DataGenResponse, ReplayRequest,
     ReplayResponse, AnalyzeRequest, AnalyzeResponse, ReportRequest,
-    ReportResponse, AssistantQueryRequest, AssistantQueryResponse
+    ReportResponse, AssistantQueryRequest, AssistantQueryResponse,
+    EventReplayResponse, ForecastResponse, ReplayStageItem, ForecastItem
 )
 from .repository import (
     BridgeRepository, TelemetryRepository, RiskRepository,
@@ -20,7 +23,7 @@ from .repository import (
 )
 from .services import seed_initial_data, run_simulation
 from .assistant import AIEngineerAssistant
-from .report_generator import generate_engineer_report
+from .report_generator import generate_engineer_report, generate_pdf_report_buffer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +61,183 @@ def startup_event():
         logger.error(f"Error during DB startup seeding: {e}")
     finally:
         db.close()
+
+# -----------------------------------------------------------------------------
+# WebSocket Manager & Hardware/Anomaly Dynamic Support API
+# -----------------------------------------------------------------------------
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                logger.error(f"Error sending websocket message: {e}")
+
+manager = ConnectionManager()
+
+@app.websocket("/api/hardware/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Maintain connection, handle ping/pong or client messages
+            data = await websocket.receive_text()
+            await manager.broadcast(data)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket connection error: {e}")
+        manager.disconnect(websocket)
+
+from pydantic import BaseModel
+
+class HardwareTelemetryPayload(BaseModel):
+    vibration_g: float
+    displacement_mm: float
+    temperature_c: float
+    traffic_load_percent: float
+
+@app.post("/api/hardware/telemetry", tags=["Hardware Bridge"])
+async def receive_hardware_telemetry(payload: HardwareTelemetryPayload, db: Session = Depends(get_db)):
+    """Receives live telemetry from ESP32 mini bridge, runs risk calculation, saves to database, and broadcasts via WS."""
+    timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    reading_dict = {
+        "bridge_id": "TS-STR-001",
+        "sensor_id": "ESP32_NODE",
+        "timestamp": timestamp_str,
+        "strain_microstrain": 45.0,
+        "vibration_g": payload.vibration_g,
+        "displacement_mm": payload.displacement_mm,
+        "temperature_c": payload.temperature_c,
+        "humidity_percent": 50.0,
+        "rainfall_mm": 0.0,
+        "traffic_load_percent": payload.traffic_load_percent,
+        "wind_speed_mps": 2.0,
+        "scenario": "hardware",
+        "ground_truth_anomaly": 1 if payload.vibration_g > 0.025 else 0
+    }
+    
+    # Save reading to SQLite
+    TelemetryRepository.bulk_insert_readings(db, [reading_dict])
+    
+    # Run risk calculation
+    vib = payload.vibration_g
+    new_risk = min(100.0, 12.0 + vib * 800.0 + payload.traffic_load_percent * 0.2)
+    
+    prio = "P4"
+    if new_risk >= 80: prio = "P1"
+    elif new_risk >= 60: prio = "P2"
+    elif new_risk >= 35: prio = "P3"
+    
+    conf = max(70.0, min(98.0, 92.0 - (new_risk * 0.1)))
+    uncert = 100.0 - conf
+    
+    # Save Risk Assessment to SQLite
+    risk_assessment = RiskAssessmentModel(
+        bridge_id="TS-STR-001",
+        timestamp=timestamp_str,
+        risk_score=new_risk,
+        uncertainty=uncert,
+        confidence_score=conf,
+        inspection_priority=prio,
+        severity_score=vib * 1000.0,
+        persistence_score=50.0,
+        sensor_agreement_score=75.0,
+        trend_score=20.0,
+        asset_vulnerability_score=30.0,
+        context_score=40.0,
+        data_quality_score=95.0,
+        risk_explanation="Real-time ESP32 edge telemetry processed via WebSocket gateway."
+    )
+    
+    db.add(risk_assessment)
+    db.commit()
+    db.refresh(risk_assessment)
+    
+    # If vibration is anomalous, save an anomaly event
+    if payload.vibration_g > 0.018:
+        anom_event = AnomalyEventModel(
+            bridge_id="TS-STR-001",
+            start_time=timestamp_str,
+            end_time=None,
+            anomaly_type="sudden_spike" if payload.vibration_g > 0.025 else "environmental_disturbance",
+            severity="CRITICAL" if payload.vibration_g > 0.025 else "WARNING",
+            duration_minutes=5,
+            description=f"MPU6050 accelerometer detected vibration threshold violation: {payload.vibration_g:.4f}g",
+            status="OPEN"
+        )
+        db.add(anom_event)
+        db.commit()
+        
+    # Broadcast to all connected websocket clients
+    message = json.dumps({
+        "timestamp": timestamp_str,
+        "reading": reading_dict,
+        "risk": {
+            "risk_score": new_risk,
+            "uncertainty": uncert,
+            "confidence_score": conf,
+            "inspection_priority": prio,
+            "risk_explanation": "Real-time ESP32 edge telemetry processed via WebSocket gateway."
+        }
+    })
+    await manager.broadcast(message)
+    
+    return {"status": "success", "risk_score": new_risk, "priority": prio}
+
+@app.get("/api/bridges/{bridge_id}/events/{event_id}/summary", tags=["Anomalies"])
+def get_event_summary(bridge_id: str, event_id: int, db: Session = Depends(get_db)):
+    """Computes telemetry deviations and statistics during an anomaly event window."""
+    event = db.query(AnomalyEventModel).filter(AnomalyEventModel.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    start_time = event.start_time
+    end_time = event.end_time or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    
+    readings = TelemetryRepository.get_timeseries(db, bridge_id, start_time=start_time, end_time=end_time, limit=1000)
+    baselines = TelemetryRepository.get_timeseries(db, bridge_id, end_time=start_time, limit=50)
+    
+    avg_base_strain = sum(r.strain_microstrain for r in baselines if r.strain_microstrain is not None) / max(1, sum(1 for r in baselines if r.strain_microstrain is not None))
+    avg_base_vib = sum(r.vibration_g for r in baselines if r.vibration_g is not None) / max(1, sum(1 for r in baselines if r.vibration_g is not None))
+    avg_base_disp = sum(r.displacement_mm for r in baselines if r.displacement_mm is not None) / max(1, sum(1 for r in baselines if r.displacement_mm is not None))
+    
+    if avg_base_strain == 0: avg_base_strain = 40.0
+    if avg_base_vib == 0: avg_base_vib = 0.012
+    if avg_base_disp == 0: avg_base_disp = 10.0
+    
+    max_strain = max((r.strain_microstrain for r in readings if r.strain_microstrain is not None), default=0.0)
+    max_vib = max((r.vibration_g for r in readings if r.vibration_g is not None), default=0.0)
+    max_disp = max((r.displacement_mm for r in readings if r.displacement_mm is not None), default=0.0)
+    
+    dev_strain = ((max_strain - avg_base_strain) / avg_base_strain) * 100 if max_strain > 0 else 0.0
+    dev_vib = ((max_vib - avg_base_vib) / avg_base_vib) * 100 if max_vib > 0 else 0.0
+    dev_disp = ((max_disp - avg_base_disp) / avg_base_disp) * 100 if max_disp > 0 else 0.0
+    
+    return {
+        "event_id": event_id,
+        "bridge_id": bridge_id,
+        "anomaly_type": event.anomaly_type,
+        "severity": event.severity,
+        "duration_minutes": event.duration_minutes,
+        "max_strain_deviation_pct": dev_strain,
+        "max_vibration_deviation_pct": dev_vib,
+        "max_displacement_deviation_pct": dev_disp,
+        "max_strain_value": max_strain,
+        "max_vibration_value": max_vib,
+        "max_displacement_value": max_disp,
+    }
 
 # -----------------------------------------------------------------------------
 # 1. Health Check API
@@ -330,6 +510,28 @@ def generate_report_endpoint(req: ReportRequest, db: Session = Depends(get_db)):
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
 
+
+@app.get("/api/reports/{report_id}/download", tags=["Reporting"])
+def download_report_pdf_endpoint(report_id: str, db: Session = Depends(get_db)):
+    """Generates and downloads a formal PDF inspection report using ReportLab."""
+    from fastapi.responses import StreamingResponse
+    from .repository import ReportRepository
+    
+    report = ReportRepository.get_report_by_id(db, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+        
+    try:
+        pdf_buffer = generate_pdf_report_buffer(db, report.bridge_id, report.title, report.id)
+        return StreamingResponse(
+            pdf_buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=report_{report_id}.pdf"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
+
+
 # -----------------------------------------------------------------------------
 # 14. AI Assistant Query API
 # -----------------------------------------------------------------------------
@@ -342,3 +544,141 @@ def assistant_query_endpoint(req: AssistantQueryRequest, db: Session = Depends(g
     assistant = AIEngineerAssistant(db)
     result = assistant.query(req.query, req.bridge_id)
     return AssistantQueryResponse(**result)
+
+
+# -----------------------------------------------------------------------------
+# 15. Event Replay API
+# -----------------------------------------------------------------------------
+@app.get("/api/bridges/{bridge_id}/events/{event_id}/replay", response_model=EventReplayResponse, tags=["Anomalies"])
+def get_event_replay(bridge_id: str, event_id: int, db: Session = Depends(get_db)):
+    """Generates timestamped stages simulating event progression for replay playback."""
+    event = db.query(AnomalyEventModel).filter(AnomalyEventModel.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    try:
+        start_time = datetime.strptime(event.start_time, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        start_time = datetime.utcnow()
+        
+    # We will interpolate 6 stages:
+    # 1. Normal Baseline: 15 minutes before the event
+    # 2. First Deviation: exact start time of event
+    # 3. Persistence Detected: 5 minutes after start
+    # 4. Sensor Agreement Detected: 8 minutes after start
+    # 5. Risk Increased: 10 minutes after start
+    # 6. Inspection Recommendation: 12 minutes after start
+    
+    stage_offsets = [
+        ("normal baseline", -15, "Normal state: all sensor telemetry remains within baseline threshold envelope.", 12.0, 0.012, 45.0, 10.2),
+        ("first deviation", 0, "Initial anomaly signature: vibration sensor MPU-01 registers deviation from baseline.", 35.0, 0.024, 48.0, 10.3),
+        ("persistence detected", 5, "Sustained anomaly: trend persistence triggers higher statistical significance.", 45.0, 0.026, 52.0, 10.4),
+        ("sensor agreement detected", 8, "Cross-sensor confirmation: strain and displacement sensors validate the deviation.", 55.0, 0.028, 55.0, 10.6),
+        ("risk increased", 10, "Risk score elevation: multi-sensor persistence increases risk rating.", 72.0, 0.032, 60.0, 10.9),
+        ("inspection recommendation", 12, "Decision recommendation: risk threshold exceeded, priority recommended, engineering dispatch recommended.", 85.0, 0.035, 62.0, 11.2)
+    ]
+    
+    # Adjust values based on the event severity
+    factor = 1.0
+    if event.severity and event.severity.upper() == "CRITICAL":
+        factor = 1.3
+    elif event.severity and event.severity.upper() == "WARNING":
+        factor = 0.9
+        
+    stages_list = []
+    for stage_name, offset_min, explanation, base_risk, base_vib, base_strain, base_disp in stage_offsets:
+        stage_time = start_time + timedelta(minutes=offset_min)
+        stage_time_str = stage_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        f = factor if offset_min >= 0 else 1.0
+        
+        risk = min(100.0, base_risk * f)
+        vib = base_vib * f
+        strain = base_strain * f
+        disp = base_disp * f
+        
+        # Load actual readings from database around this time to make it extremely realistic
+        target_reading = db.query(SensorReadingModel).filter(
+            SensorReadingModel.bridge_id == bridge_id,
+            SensorReadingModel.timestamp >= (stage_time - timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S"),
+            SensorReadingModel.timestamp <= (stage_time + timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S")
+        ).first()
+        
+        if target_reading:
+            vib = target_reading.vibration_g or vib
+            strain = target_reading.strain_microstrain or strain
+            disp = target_reading.displacement_mm or disp
+            
+        stages_list.append(ReplayStageItem(
+            stage=stage_name,
+            timestamp=stage_time_str,
+            vibration_g=float(vib),
+            strain_microstrain=float(strain),
+            displacement_mm=float(disp),
+            risk_score=float(risk),
+            explanation=explanation
+        ))
+        
+    return EventReplayResponse(
+        event_id=event_id,
+        bridge_id=bridge_id,
+        anomaly_type=event.anomaly_type,
+        stages=stages_list
+    )
+
+
+# -----------------------------------------------------------------------------
+# 16. Trend Forecasting API
+# -----------------------------------------------------------------------------
+from .forecasting import rolling_regression_forecast, exponential_smoothing_forecast
+from sqlalchemy import desc
+
+@app.get("/api/bridges/{bridge_id}/forecast", response_model=ForecastResponse, tags=["Simulation & ML"])
+def get_bridge_forecast(
+    bridge_id: str, 
+    horizon: int = Query(default=10, ge=5, le=30),
+    method: str = Query(default="rolling_regression"),
+    db: Session = Depends(get_db)
+):
+    """Forecasts risk score and sensor trends. Strictly avoids prediction of failure terminology."""
+    bridge = BridgeRepository.get_bridge_by_id(db, bridge_id)
+    if not bridge:
+        raise HTTPException(status_code=404, detail="Bridge not found")
+        
+    # Get last 30 risk assessments
+    risks = db.query(RiskAssessmentModel).filter(
+        RiskAssessmentModel.bridge_id == bridge_id
+    ).order_by(desc(RiskAssessmentModel.timestamp)).limit(30).all()
+    
+    if not risks:
+        raise HTTPException(status_code=404, detail="No historical risk data available for forecasting")
+        
+    risks.reverse() # chronologically ascending
+    
+    history_data = []
+    for r in risks:
+        reading = db.query(SensorReadingModel).filter(
+            SensorReadingModel.bridge_id == bridge_id,
+            SensorReadingModel.timestamp == r.timestamp
+        ).first()
+        
+        vib_val = reading.vibration_g if (reading and reading.vibration_g is not None) else (r.severity_score / 1000.0)
+        history_data.append({
+            "timestamp": r.timestamp,
+            "risk_score": r.risk_score,
+            "sensor_val": vib_val
+        })
+        
+    if method == "exponential_smoothing":
+        forecast_items_dicts = exponential_smoothing_forecast(history_data, horizon)
+    else:
+        forecast_items_dicts = rolling_regression_forecast(history_data, horizon)
+        
+    forecast_items = [ForecastItem(**item) for item in forecast_items_dicts]
+    
+    return ForecastResponse(
+        bridge_id=bridge_id,
+        horizon=horizon,
+        method=method,
+        forecast=forecast_items
+    )

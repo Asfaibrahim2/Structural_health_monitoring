@@ -19,7 +19,6 @@ export default function AssistantPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Tools"
         title="AI Engineer Assistant"
         description="Ask natural-language questions about structural health, risk drivers, sensor contributions, and recommended next steps."
         breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "AI Assistant" }]}

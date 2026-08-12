@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Sparkles,
   FileText,
-  ShieldAlert,
+  Activity,
   Cpu,
   Box,
 } from "lucide-react";
@@ -27,7 +27,10 @@ interface NavItem {
 const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Overview",
-    items: [{ href: "/", label: "Command Center", icon: LayoutGrid, match: (p) => p === "/" }],
+    items: [
+      { href: "/welcome", label: "Welcome Showcase", icon: Sparkles, match: (p) => p === "/welcome" },
+      { href: "/", label: "Command Center", icon: LayoutGrid, match: (p) => p === "/" }
+    ],
   },
   {
     title: "Monitor",
@@ -66,7 +69,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <aside className="flex h-full min-h-screen w-[260px] shrink-0 flex-col border-r border-[var(--color-hairline)] bg-[var(--color-bg-elevated)] px-4 py-6">
       <Link href="/" onClick={onNavigate} className="mb-8 flex items-center gap-3 px-2">
         <div className="relative grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[var(--color-accent)] to-[#0ea5e9] text-white shadow-[var(--shadow-glow)]">
-          <ShieldAlert size={20} strokeWidth={2.5} />
+          <Activity size={20} strokeWidth={2.5} />
         </div>
         <div>
           <p className="font-[family-name:var(--font-display)] text-[16px] font-bold tracking-tight text-[var(--color-ink)]">
@@ -114,13 +117,6 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
-
-      <div className="mt-6 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] px-3.5 py-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-muted)]">Disclaimer</p>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-ink-muted)]">
-          Decision-support prototype. Does not certify structural safety.
-        </p>
-      </div>
     </aside>
   );
 }

@@ -22,7 +22,6 @@ export default function WhatIfPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Stage F · Page 5"
         title="What-If Simulator"
         description="Adjust traffic, rainfall, temperature, maintenance delay, and simulation duration. Compare current vs simulated risk with affected evidence and disclaimer."
         breadcrumbs={[
@@ -30,7 +29,6 @@ export default function WhatIfPage() {
           { label: "What-If Simulator" },
         ]}
       />
-      <Disclaimer className="mb-6" />
 
       <div className="mb-6 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-surface)] p-5 shadow-sm">
         <div className="flex items-start gap-3">

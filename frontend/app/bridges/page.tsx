@@ -4,7 +4,9 @@ import { Card } from "@/components/Card";
 import PriorityBadge from "@/components/PriorityBadge";
 import PageHeader from "@/components/PageHeader";
 import { ArrowRight } from "lucide-react";
+import { getBridgePersonality } from "@/lib/bridgeHelpers";
 
+// UI/UX cleanup: adjusted layout/labels for clarity
 export default async function FleetRegistryPage() {
   const bridges = await api.bridges().catch(() => []);
   const sorted = [...bridges].sort((a, b) => b.latest_risk_score - a.latest_risk_score);
@@ -12,7 +14,6 @@ export default async function FleetRegistryPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Operations"
         title="Fleet Registry"
         description="All monitored Telangana structures with live risk indicators, sensor counts, and scenario profiles."
         breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Fleet Registry" }]}
@@ -34,6 +35,9 @@ export default async function FleetRegistryPage() {
                 <PriorityBadge priority={b.latest_inspection_priority} compact />
               </div>
               <p className="mt-2 text-[13px] text-[var(--color-ink-muted)]">{b.structure_type}</p>
+              <p className="mt-1.5 text-[12.5px] italic text-[var(--color-accent-bright)]">
+                {getBridgePersonality(b)}
+              </p>
               <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[var(--color-ink-muted)]">
                 <span>Age {b.age_years}y</span>
                 <span>{b.sensor_count} sensors</span>
@@ -41,7 +45,7 @@ export default async function FleetRegistryPage() {
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-[var(--color-hairline)] pt-4">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-[var(--color-ink-muted)]">Risk score</p>
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--color-ink-muted)]">Risk indicator (0–100)</p>
                   <p className="font-[family-name:var(--font-mono)] text-[20px] font-semibold text-[var(--color-ink)]">
                     {b.latest_risk_score.toFixed(1)}
                   </p>

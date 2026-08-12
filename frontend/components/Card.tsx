@@ -49,21 +49,21 @@ export function StatCard({
 
   return (
     <div
-      className="rounded-[var(--radius-card)] border p-6 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1"
+      className="rounded-[var(--radius-card)] border p-4 sm:p-6 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1"
       style={{
         backgroundColor: t.bg,
         borderColor: t.border,
         boxShadow: `var(--shadow-card), 0 0 40px ${t.glow}`,
       }}
     >
-      <p className="text-label">{label}</p>
+      <p className="text-label text-[10px] sm:text-[12px]">{label}</p>
       <p
-        className="mt-4 font-[family-name:var(--font-display)] text-[44px] font-extrabold leading-none tracking-tight"
+        className="mt-2 sm:mt-4 font-[family-name:var(--font-display)] text-[24px] sm:text-[44px] font-extrabold leading-none tracking-tight"
         style={{ color: t.color }}
       >
         {value}
       </p>
-      {sub && <p className="mt-3 text-[15px] font-medium leading-snug text-[var(--color-ink-muted)]">{sub}</p>}
+      {sub && <p className="mt-2 sm:mt-3 text-[11px] sm:text-[15px] font-medium leading-snug text-[var(--color-ink-muted)]">{sub}</p>}
     </div>
   );
 }

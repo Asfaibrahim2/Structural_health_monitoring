@@ -139,7 +139,7 @@ export default function WhatIfSimulator({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-paper)] p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-ink-muted)]">
-                Current risk indicator (0–100) <Tooltip text={TOOLTIPS.risk} />
+                Current risk indicator (0–100)
               </p>
               <p className="mt-1 font-[family-name:var(--font-display)] text-[32px] font-semibold text-[var(--color-ink)]">
                 {Number(result.current_values.risk_score).toFixed(1)}
@@ -151,7 +151,7 @@ export default function WhatIfSimulator({
             <div className="rounded-xl border-2 border-[var(--color-structural)]/30 bg-[var(--color-structural-soft)] p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-structural)]">
-                  Simulated risk indicator <Tooltip text={TOOLTIPS.risk} />
+                  Simulated risk indicator
                 </p>
                 {simPriority && <PriorityBadge priority={simPriority} compact />}
               </div>
@@ -186,11 +186,6 @@ export default function WhatIfSimulator({
               </ul>
             </div>
           )}
-
-          <p className="text-[13px] leading-relaxed text-[var(--color-ink-muted)]">
-            {result.explanation} Projected over {simDuration} day{simDuration > 1 ? "s" : ""}.
-          </p>
-          <Disclaimer className="mt-3" />
         </div>
       )}
     </Card>

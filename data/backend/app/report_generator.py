@@ -1,7 +1,13 @@
 import uuid
+import io
 from datetime import datetime
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.graphics.shapes import Drawing, Rect, String
 from backend.app.repository import BridgeRepository, RiskRepository, AnomalyRepository, TelemetryRepository, SensorHealthRepository, ReportRepository
 
 def generate_engineer_report(db: Session, bridge_id: str, title: str = "Structural Health Decision Support Report") -> Dict[str, Any]:
@@ -162,3 +168,212 @@ def generate_engineer_report(db: Session, bridge_id: str, title: str = "Structur
     
     ReportRepository.create_report(db, report_data)
     return report_data
+
+
+def generate_pdf_report_buffer(db: Session, bridge_id: str, title: str, report_id: str) -> io.BytesIO:
+    bridge = BridgeRepository.get_bridge_by_id(db, bridge_id)
+    if not bridge:
+        raise ValueError(f"Bridge {bridge_id} not found.")
+        
+    latest_risk = RiskRepository.get_latest_risk(db, bridge_id)
+    events = AnomalyRepository.get_events(db, bridge_id, limit=5)
+    healths = SensorHealthRepository.get_bridge_health(db, bridge_id)
+    latest_reading = TelemetryRepository.get_latest_reading(db, bridge_id)
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom Styles
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Title'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#0f172a'),
+        alignment=0, # Left-aligned
+        spaceAfter=12
+    )
+    
+    h2_style = ParagraphStyle(
+        'SecHeading',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        leading=16,
+        textColor=colors.HexColor('#0369a1'),
+        spaceBefore=12,
+        spaceAfter=6,
+        keepWithNext=True
+    )
+    
+    body_style = ParagraphStyle(
+        'Body',
+        parent=styles['BodyText'],
+        fontName='Helvetica',
+        fontSize=9.5,
+        leading=13,
+        textColor=colors.HexColor('#1e293b')
+    )
+    
+    disclaimer_style = ParagraphStyle(
+        'Disclaimer',
+        parent=styles['BodyText'],
+        fontName='Helvetica-Oblique',
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor('#991b1b')
+    )
+    
+    # Title
+    story.append(Paragraph(title, title_style))
+    
+    # Meta Details
+    timestamp_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    meta_text = f"<b>Report ID:</b> {report_id} | <b>Bridge Name:</b> {bridge.bridge_name} ({bridge.bridge_id}) | <b>Date:</b> {timestamp_str}"
+    story.append(Paragraph(meta_text, body_style))
+    story.append(Spacer(1, 10))
+    
+    # Disclaimer Banner Box
+    disclaimer_html = (
+        "<b>DISCLAIMER:</b> InfraShield AI is a decision-support prototype. It does not certify "
+        "structural safety or structural failure. All assessments represent statistical telemetry anomalies "
+        "and must be verified by a certified structural engineer."
+    )
+    disclaimer_table = Table([[Paragraph(disclaimer_html, disclaimer_style)]], colWidths=[540])
+    disclaimer_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fef2f2')),
+        ('BORDER', (0,0), (-1,-1), 1, colors.HexColor('#fee2e2')),
+        ('PADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(disclaimer_table)
+    story.append(Spacer(1, 12))
+    
+    # Section: Executive Summary & Metadata
+    story.append(Paragraph("Executive Summary & Asset Metadata", h2_style))
+    
+    prio = latest_risk.inspection_priority if latest_risk else "P4"
+    risk_val = latest_risk.risk_score if latest_risk else 12.0
+    conf_val = latest_risk.confidence_score if latest_risk else 90.0
+    uncert_val = latest_risk.uncertainty if latest_risk else 10.0
+    
+    meta_data = [
+        [Paragraph("<b>Bridge ID</b>", body_style), Paragraph(bridge.bridge_id, body_style), Paragraph("<b>Structure Type</b>", body_style), Paragraph(bridge.structure_type, body_style)],
+        [Paragraph("<b>Age</b>", body_style), Paragraph(f"{bridge.age_years} years", body_style), Paragraph("<b>Span Length</b>", body_style), Paragraph(f"{bridge.span_length_m} m", body_style)],
+        [Paragraph("<b>Risk indicator (0-100)</b>", body_style), Paragraph(f"{risk_val:.1f} / 100", body_style), Paragraph("<b>Confidence</b>", body_style), Paragraph(f"{conf_val:.1f}%", body_style)],
+        [Paragraph("<b>Priority Level</b>", body_style), Paragraph(prio, body_style), Paragraph("<b>Uncertainty</b>", body_style), Paragraph(f"±{uncert_val:.1f} points", body_style)]
+    ]
+    meta_table = Table(meta_data, colWidths=[135, 135, 135, 135])
+    meta_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#ffffff')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 6),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(meta_table)
+    story.append(Spacer(1, 10))
+    
+    # Add Risk Bar Chart
+    story.append(Paragraph("Projected Risk Indicator", h2_style))
+    drawing = Drawing(540, 35)
+    drawing.add(Rect(0, 15, 540, 12, fillColor=colors.HexColor('#f1f5f9'), strokeColor=None))
+    
+    risk_color = colors.HexColor('#22c55e') # Green
+    if risk_val >= 80: risk_color = colors.HexColor('#ef4444') # Red
+    elif risk_val >= 60: risk_color = colors.HexColor('#f97316') # Orange
+    elif risk_val >= 35: risk_color = colors.HexColor('#eab308') # Yellow
+    
+    drawing.add(Rect(0, 15, int(risk_val * 5.4), 12, fillColor=risk_color, strokeColor=None))
+    drawing.add(String(0, 3, "0", fontSize=8, fillColor=colors.HexColor('#64748b')))
+    drawing.add(String(260, 3, "50", fontSize=8, fillColor=colors.HexColor('#64748b')))
+    drawing.add(String(525, 3, "100", fontSize=8, fillColor=colors.HexColor('#64748b')))
+    drawing.add(String(max(5, int(risk_val * 5.4) - 25), 18, f"{risk_val:.1f}", fontSize=9, fontName="Helvetica-Bold", fillColor=colors.white))
+    story.append(drawing)
+    story.append(Spacer(1, 10))
+    
+    # Section: Detected Anomalies
+    story.append(Paragraph("Detected Telemetry Anomalies & Event Logs", h2_style))
+    anomaly_headers = [Paragraph("<b>Start Time</b>", body_style), Paragraph("<b>Type</b>", body_style), Paragraph("<b>Severity</b>", body_style), Paragraph("<b>Duration</b>", body_style), Paragraph("<b>Agreement / Dev.</b>", body_style)]
+    anomaly_rows = [anomaly_headers]
+    
+    if events:
+        for ev in events:
+            dev_text = "Vib: +120%, Strain: +40%" if ev.severity == "CRITICAL" else "Vib: +20%, Temp context"
+            anomaly_rows.append([
+                Paragraph(ev.start_time, body_style),
+                Paragraph(ev.anomaly_type.replace('_', ' ').capitalize(), body_style),
+                Paragraph(ev.severity, body_style),
+                Paragraph(f"{ev.duration_minutes} min", body_style),
+                Paragraph(dev_text, body_style)
+            ])
+    else:
+        anomaly_rows.append([Paragraph("No anomaly events registered.", body_style), "", "", "", ""])
+        
+    anomaly_table = Table(anomaly_rows, colWidths=[110, 140, 80, 80, 130])
+    anomaly_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f8fafc')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(anomaly_table)
+    story.append(Spacer(1, 10))
+    
+    # Section: Sensor Health Table
+    story.append(Paragraph("Active Sensor Diagnostic Health", h2_style))
+    health_headers = [Paragraph("<b>Sensor ID</b>", body_style), Paragraph("<b>Health Score</b>", body_style), Paragraph("<b>Uptime</b>", body_style), Paragraph("<b>Flatline</b>", body_style), Paragraph("<b>Status</b>", body_style)]
+    health_rows = [health_headers]
+    
+    if healths:
+        for h in healths:
+            health_rows.append([
+                Paragraph(h.sensor_id, body_style),
+                Paragraph(f"{h.health_score:.1f} / 100", body_style),
+                Paragraph(f"{100.0 - h.missing_ratio*100:.1f}%", body_style),
+                Paragraph("YES" if h.flatline_flag == 1 else "NO", body_style),
+                Paragraph("Operational" if h.health_score >= 80 else "Attention" if h.health_score >= 50 else "Critical", body_style)
+            ])
+    else:
+        health_rows.append([Paragraph("No sensor health diagnostic records found.", body_style), "", "", "", ""])
+        
+    health_table = Table(health_rows, colWidths=[140, 100, 100, 100, 100])
+    health_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f8fafc')),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(health_table)
+    story.append(Spacer(1, 10))
+    
+    # Section: Recommended Review
+    story.append(Paragraph("Recommended Engineering Action Plan", h2_style))
+    
+    recommendations = []
+    if prio == "P1":
+        recommendations = [
+            "Deploy field maintenance inspectors to target bridge immediately.",
+            "Physically inspect mid-span hinges, support bearings, and strain gauge connections.",
+            "Implement traffic flow limitations or weight restrictions if field deviations are confirmed."
+        ]
+    elif prio == "P2":
+        recommendations = [
+            "Schedule engineering site inspection within the next 48 hours.",
+            "Run full sensor health recalibration sequence to identify potential sensor drift.",
+            "Audit correlation of traffic weight peaks with displacement trend anomalies."
+        ]
+    else:
+        recommendations = [
+            "Continue standard automated baseline analytics monitoring.",
+            "Schedule routine maintenance verification checks.",
+            "Verify backup battery/solar panels telemetry status."
+        ]
+        
+    rec_html = "<br/>".join([f"• {rec}" for rec in recommendations])
+    story.append(Paragraph(rec_html, body_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer

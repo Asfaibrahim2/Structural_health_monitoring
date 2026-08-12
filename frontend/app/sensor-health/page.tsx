@@ -40,12 +40,10 @@ export default function SensorHealthPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Stage F · Page 7"
         title="Sensor Health"
         description="Monitor sensor reliability — health score, dropout, flatline, noise, drift, and last update. Status uses text labels plus color for accessibility."
         breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Sensor Health" }]}
       />
-      <Disclaimer className="mb-6" />
 
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div className="flex gap-2">

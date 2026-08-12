@@ -11,6 +11,7 @@ import { Card } from "@/components/Card";
 import PriorityBadge from "@/components/PriorityBadge";
 import RiskGauge from "@/components/RiskGauge";
 import { LoadingState, ErrorState } from "@/components/ui/AsyncState";
+import ForecastCard from "@/components/ForecastCard";
 
 export default function SensorsPage() {
   const [bridgeId, setBridgeId] = useState("");
@@ -50,12 +51,10 @@ export default function SensorsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Stage F · Page 2"
         title="Digital Twin"
         description="Simplified bridge model with 5 sensor nodes. Green = normal, yellow = warning, red = critical. Click any sensor to see readings, baseline, deviation, health, and confidence."
         breadcrumbs={[{ label: "Command Center", href: "/" }, { label: "Digital Twin" }]}
       />
-      <Disclaimer className="mb-6" />
 
       <div className="mb-6 max-w-md">
         <label className="text-label mb-2 block">Select structure</label>
@@ -87,19 +86,23 @@ export default function SensorsPage() {
             )}
           </div>
 
-          <Card glow className="flex flex-col">
-            <p className="text-label text-[var(--color-accent)]">Risk summary</p>
-            <h3 className="mt-2 font-[family-name:var(--font-display)] text-[18px] font-bold">{bridge?.bridge_name}</h3>
-            <div className="my-6 flex flex-col items-center">
-              <RiskGauge score={risk?.risk_score ?? bridge?.latest_risk_score ?? 0} size={150} />
-              <div className="mt-4">
-                <PriorityBadge priority={risk?.inspection_priority ?? bridge?.latest_inspection_priority ?? "P4"} />
+          <div className="space-y-4 lg:col-span-1 flex flex-col">
+            <Card glow className="flex flex-col">
+              <p className="text-label text-[var(--color-accent)]">Risk summary</p>
+              <h3 className="mt-2 font-[family-name:var(--font-display)] text-[18px] font-bold">{bridge?.bridge_name}</h3>
+              <div className="my-6 flex flex-col items-center">
+                <RiskGauge score={risk?.risk_score ?? bridge?.latest_risk_score ?? 0} size={150} />
+                <div className="mt-4">
+                  <PriorityBadge priority={risk?.inspection_priority ?? bridge?.latest_inspection_priority ?? "P4"} />
+                </div>
               </div>
-            </div>
-            <p className="text-[13px] text-[var(--color-ink-muted)]">
-              Priority labels use text + color — not color alone — for accessibility.
-            </p>
-          </Card>
+              <p className="text-[13px] text-[var(--color-ink-muted)]">
+                Priority labels use text + color — not color alone — for accessibility.
+              </p>
+            </Card>
+
+            <ForecastCard bridgeId={bridgeId} />
+          </div>
         </div>
       )}
     </>

@@ -124,3 +124,21 @@ def test_post_assistant_query(client):
     data = response.json()
     assert "answer" in data
     assert "suggested_actions" in data
+
+
+def test_download_report_pdf(client):
+    # Generate report
+    payload = {"bridge_id": "TS-STR-001", "title": "Unit Test PDF Report"}
+    gen_response = client.post("/api/reports/generate", json=payload)
+    assert gen_response.status_code == 200
+    gen_data = gen_response.json()
+    report_id = gen_data["report_id"]
+    
+    # Download PDF
+    download_response = client.get(f"/api/reports/{report_id}/download")
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"] == "application/pdf"
+    
+    pdf_bytes = download_response.content
+    assert len(pdf_bytes) > 0
+    assert pdf_bytes.startswith(b"%PDF")
